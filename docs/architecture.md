@@ -6,7 +6,7 @@
 
 | Layer | Rule |
 |---|---|
-| **Core** | Always installed, small RAM footprint, cannot be removed. Friday (the chat process, every Cabinet advisor) is already wired to memory and to the app executor. |
+| **Core** | Always installed, small RAM footprint, cannot be removed. Nothing in this repo is wired to memory or the app executor yet — this table describes the target, not the current state of the code. |
 | **Optional apps** | The Docker Compose catalog rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus a few project-specific optional pieces (Mattermost, Taskrunner, Cloudflare tunnel, Headscale). Nothing in this layer starts until the owner asks for it. |
 
 ```mermaid
@@ -23,6 +23,7 @@ flowchart TB
       Exec[app executor]
     end
     subgraph optional [optional, installed by asking]
+      Gateway[integration gateway]
       Apps[Catalog apps]
     end
   end
@@ -32,8 +33,9 @@ flowchart TB
   Memory --> Pg
   Friday --> Soul
   Board --> Friday
-  Friday --> Exec
-  Exec --> Apps
+  Exec --> Gateway
+  Friday --> Gateway
+  Gateway --> Apps
 ```
 
 Left out of core on purpose: Mattermost, Telegram, media servers (Plex,
@@ -88,10 +90,15 @@ Two Compose networks separate the trusted core from anything optional:
 
 The executor sits on both networks so it can health-check an app by its
 Compose DNS name and container port. Friday itself is **not** on the `apps`
-network. Advisors reach an app only through a gateway process that also
+network. Advisors reach an app only through the same gateway process that
 sits on both networks and allows only the method and path a wire file names
-for that advisor. An app container cannot open Postgres, Qdrant, or the
-executor's control port — that boundary is a test, not just a design intent.
+for that advisor — the diagram above shows Friday's request to an app
+routed through that gateway, not straight to the app, and shows the
+executor reaching the gateway rather than the app container directly. An
+app container cannot open Postgres, Qdrant, or the executor's control
+port; that boundary is meant to be a test, not just a design intent, but
+no such test exists yet — there is no executor, gateway, or `apps` network
+in this repo today.
 
 ## Approval and mount safety rules
 

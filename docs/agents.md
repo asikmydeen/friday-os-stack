@@ -13,9 +13,13 @@ real infrastructure hostnames.
 - `@cto is the service up` or `ask my cfo what we spent` — a one-turn
   persona switch. The next turn is back to Friday's own voice unless the
   owner says to stay with that advisor.
-- Every advisor shares the same memory, the same receipts, and the same
-  app registry as Friday. Installing an app never creates a new "person" to
-  talk to — the relevant advisor just gains that app's tools.
+- Every advisor reads and writes through the same memory API and the same
+  app registry as Friday, but not the same namespace: `cabinet_working` and
+  `role_profile_<role_id>` are scoped to that role's `owner_id`, and a
+  search without an owner filter is refused (see `docs/memory.md`). A
+  person and a role never share a namespace, so "same memory system" does
+  not mean "one shared pool." Installing an app never creates a new
+  "person" to talk to — the relevant advisor just gains that app's tools.
 
 ## Starter set (`charters/`)
 
@@ -34,10 +38,17 @@ A larger set of generic advisor roles ships inactive under `charters/full/`:
 `advisor` (a blank template), `researcher`, `architect`, `backend`, `web`,
 `mobile`, `tester`, `reviewer`, `buyer`, `shopper`, `fetcher`, `health`,
 `family`, `legal`, `faith`, `travel`, `product`, `program`, `mentor`,
-`content`. An operator copies the ones they want into `charters/` (or
-points the compose mount at both directories) to enable them. None of them
-contain any household-specific detail — they're job descriptions, not
-people.
+`content`. None of them contain any household-specific detail — they're
+job descriptions, not people.
+
+Only charter files directly under `charters/<id>.md` are active: Friday's
+compose service bind-mounts `./charters` (not `./charters/full`) to
+`/soul/agents`, and Compose has no way to union two host directories onto
+one container path. Enabling a full-pack role therefore means copying (or
+symlinking) that one file from `charters/full/` into `charters/`, not
+repointing the mount — repointing it at `./charters/full` instead would
+drop the starter set (`chief`, `cto`, `cfo`, `coach`, `home`, `media`)
+entirely, since none of those files live under `full/`.
 
 ## Tool grants
 

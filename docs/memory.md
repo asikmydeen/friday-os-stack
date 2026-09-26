@@ -20,14 +20,30 @@
 | `friday_findings` | bootstrap | Research cards, fetched-page summaries | Owner hub search |
 | `friday_persona` | bootstrap | Stable traits the persona pass extracts | Owner portrait questions |
 | `knowledge` | bootstrap | Decisions/docs the operator asks to keep, tagged with a `topic` | Hub search for every owner turn |
-| `cabinet_working` | bootstrap | A role's working notes | That role only — a search without an owner filter is refused |
-| `role_profile_<role_id>` | first time that role remembers | That role's working notes | That role's own gather/recall |
+| `cabinet_working` | bootstrap | A role's scratch notes for the current turn/session | That role only — a search without an owner filter is refused |
+| `role_profile_<role_id>` | first time that role remembers something worth keeping | That role's durable working notes | That role's own gather/recall |
 | `person_profile_<person_id>` | first time that person is added | That person's notes | That person's own turns |
 | `person_episodes_<person_id>`, `person_persona_<person_id>` | same moment | That person's episodes/traits | That person's own turns |
 
-A new install ships with an empty `family_shared` — pooled memory shared
-across household members is opt-in, not a default, because it can leak one
-person's notes into another person's answers.
+`cabinet_working` and `role_profile_<role_id>` are not the same thing even
+though both hold "a role's working notes": `cabinet_working` is created at
+bootstrap and is where a role's notes live before that role has ever
+remembered anything durable; `role_profile_<role_id>` is created lazily,
+the first time that role's advisor calls remember, and is where a promoted,
+durable note for that role ends up. The same split exists between
+`friday_*` (bootstrap, the owner's own notes) and `person_profile_<person_id>`
+(lazy, a second person's notes) — for the first release, with exactly one
+owner and no second person yet, `friday_*` is the only one of that pair
+that actually has any data in it.
+
+`family_shared` is not created by bootstrap and does not exist on a fresh
+install. Pooled memory shared across household members is opt-in, not a
+default, because it can leak one person's notes into another person's
+answers — and the first release has exactly one owner, so there is no
+household to pool across yet. `family_shared` is created explicitly, the
+first time a second household member is added and the owner opts into
+shared logistics (see `charters/full/family.md`); until then, no code path
+reads or writes it.
 
 ## Per-person isolation is the hard rule
 
@@ -59,8 +75,34 @@ write completes after a later revision's write.
 `id`, `owner_id`, `owner_kind`, `revision`, `content`, `title`, `tags`,
 `category`, `pinned`, `visibility` (`master`, `working`, `promoted`),
 `index_state`, `deleted_at`, `promoted_from`, `promoted_at`, `created_at`,
-`updated_at`. Writing the same content for the same owner updates the row
-and increments `revision` rather than creating a duplicate.
+`updated_at`. Writing the same content for the same owner (and category)
+updates that row and increments `revision` rather than inserting a
+duplicate; this is enforced by a real unique index on
+`(owner_id, category, content)`, not just described in prose. `category`
+defaults to the empty string rather than SQL `NULL` specifically so that
+key can't silently stop deduplicating for every row that never sets a
+category — Postgres treats two `NULL`s in a unique index as distinct rows.
+
+`memory_index_queue` is a separate table, not a column on `memories`. The
+row and its queue item commit in the same transaction; a worker claims the
+oldest unclaimed item and, inside that claim, conditionally updates
+`memories` only if `revision` still matches what the queue item was
+created against. `index_state` on `memories` is a status label for display,
+not the work list — a tombstoned row (`deleted_at` set) still owes a
+Qdrant delete, so filtering work by `deleted_at IS NULL` would hide
+exactly the rows that still need that delete to run.
+
+This file is applied with `CREATE TABLE IF NOT EXISTS`, which only runs
+Postgres's init scripts on an empty data directory. An existing volume
+from an older column layout (for example, one with `person_id`/`kind`
+instead of `owner_id`/`owner_kind`) is never migrated by this file; it has
+to be migrated explicitly first, or the new `owner_id` index and unique key
+simply fail against data that predates them. `owner_id` is documented as
+immutable, but nothing in the schema itself prevents an `UPDATE` from
+changing it — that has to hold at the application layer. Friday's own notes
+(`friday_*`) are expected to set `visibility = 'master'` explicitly; the
+schema's `working` default is for role/person working notes, not for
+Friday's own writes.
 
 ## Backup
 
