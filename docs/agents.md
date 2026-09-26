@@ -30,12 +30,14 @@ real infrastructure hostnames.
 
 ## Full pack (`charters/full/`)
 
-A larger set of generic advisor roles (e.g. researcher, architect, backend,
-web, tester, reviewer, buyer, shopper, family, legal, faith, travel,
-product, program, mentor, content) ships inactive under `charters/full/`.
-An operator copies the ones they want into `charters/` (or points the
-compose mount at both directories) to enable them. None of them contain any
-household-specific detail — they're job descriptions, not people.
+A larger set of generic advisor roles ships inactive under `charters/full/`:
+`advisor` (a blank template), `researcher`, `architect`, `backend`, `web`,
+`mobile`, `tester`, `reviewer`, `buyer`, `shopper`, `fetcher`, `health`,
+`family`, `legal`, `faith`, `travel`, `product`, `program`, `mentor`,
+`content`. An operator copies the ones they want into `charters/` (or
+points the compose mount at both directories) to enable them. None of them
+contain any household-specific detail — they're job descriptions, not
+people.
 
 ## Tool grants
 

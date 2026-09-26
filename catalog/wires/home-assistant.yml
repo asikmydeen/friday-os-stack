@@ -1,0 +1,19 @@
+# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# Home Assistant is a separate catalog entry, not part of the media bundle.
+# Installing it enables the Home charter and grants it home_status/home_control
+# only — no other advisor gets these tools.
+
+id: home-assistant
+category: home-automation
+
+storage:
+  - { volume: home_assistant_config, mount: /config }
+
+ports:
+  - { host: 127.0.0.1:8123, container: 8123 }
+
+wires:
+  health: { url: http://home-assistant:8123/api/, via: executor on the apps network }
+  secrets: [HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN]  # long-lived token
+  agents: [home]
+  tools: [home_status, home_control]  # granted to the home charter only

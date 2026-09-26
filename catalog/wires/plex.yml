@@ -1,0 +1,24 @@
+# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# Alternative primary player in the "Movies and TV" bundle (docs/apps.md).
+# Only one of jellyfin/plex is marked primary at a time; both can be healthy.
+
+id: plex
+category: media-server
+conflicts_primary_with: [jellyfin]
+
+storage:
+  - { volume: library, sub: movies, mount: /data/movies, read_only: true }
+  - { volume: library, sub: tv, mount: /data/tv, read_only: true }
+  - { volume: plex_config, mount: /config }
+
+ports:
+  - { host: 127.0.0.1:32400, container: 32400 }
+
+questions:
+  - { id: claim_token, kind: secret }  # one-time Plex claim; server token is
+                                        # stored after first successful claim
+
+wires:
+  health: { url: http://plex:32400/identity, via: executor on the apps network }
+  secrets: [PLEX_CLAIM_TOKEN, PLEX_SERVER_TOKEN]
+  agents: [media]

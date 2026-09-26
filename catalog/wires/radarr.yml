@@ -1,0 +1,23 @@
+# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# Part of the "Movies and TV" bundle (docs/apps.md). Fetches movies into
+# library/movies via qBittorrent, indexed through Prowlarr.
+
+id: radarr
+category: media-management
+
+storage:
+  - { volume: library, sub: downloads, mount: /downloads }
+  - { volume: library, sub: movies, mount: /movies }
+  - { volume: radarr_config, mount: /config }
+
+ports:
+  - { host: 127.0.0.1:7878, container: 7878 }
+
+wires:
+  health: { url: http://radarr:7878/ping, via: executor on the apps network }
+  secrets: [RADARR_URL, RADARR_API_KEY]
+  agents: [fetcher]
+  webhook: { from: radarr, to: http://webhooks:8080/arr }
+  quality_profile_order: worst-first  # Unknown ranked first and disallowed —
+                                       # a best-first list makes junk look
+                                       # like it already met the cutoff

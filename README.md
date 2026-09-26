@@ -22,6 +22,7 @@ friday-os-stack/
   config/
     hostnames.example.yml  which container each hostname hits
   charters/                starter Cabinet advisor charters, generic owner
+    full/                  larger inactive advisor pack (copy in what you need)
   soul/SOUL.example.md     short character file the operator edits
   scripts/
     bootstrap.sh           writes .env, then runs the memory bootstrap
@@ -57,6 +58,12 @@ friday-os-stack/
 | App executor | Separate process from the chatbot; accepts a named, approved operation only |
 
 Left out of core on purpose: Mattermost, Telegram, Plex, Jellyfin, Radarr, Home Assistant, Coder, Cloudflare, Headscale, and any chat-sized local language model. Those are optional, allowlisted apps installed after the core boots.
+
+## Developing against this repo
+
+See `CONTRIBUTING.md` for prerequisites, first-time `.env` setup, what
+actually runs today versus what's still a placeholder, and secret-scanning
+before you push.
 
 ## License
 

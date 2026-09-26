@@ -1,0 +1,28 @@
+# EXPERIMENTAL — bundle draft, not implemented or tested yet.
+# The "Movies and TV" bundle described in docs/apps.md. Bundling these ids
+# together and answering "Jellyfin or Plex" is the one question the operator
+# sees; everything below that is applied automatically once approved.
+
+id: movies-tv
+kind: bundle
+question:
+  id: player
+  choices: [jellyfin, plex]
+  default: jellyfin  # the stack can create Jellyfin's API key locally;
+                      # Plex needs a one-time claim token from the operator
+
+apps: [jellyfin, plex, qbittorrent, prowlarr, radarr, sonarr]
+
+wiring:
+  # Applied by the executor as one approved operation, in this order:
+  - generate_api_keys: [radarr, sonarr, prowlarr, qbittorrent]
+  - point: { radarr: qbittorrent, category: radarr }
+  - point: { sonarr: qbittorrent, category: sonarr }
+  - point: { prowlarr: [radarr, sonarr], full_sync: true }
+  - quality_profile_order: worst-first
+  - register_webhook: { radarr: http://webhooks:8080/arr, sonarr: http://webhooks:8080/arr }
+  - point_player_at: [library/movies, library/tv]
+  - grant_tools: { fetcher: [radarr, sonarr, prowlarr, qbittorrent], media: [player] }
+  - add_health_probes: true
+  - bind_uis: 127.0.0.1  # a public name is a separate, later confirmation
+                          # under docs/cloudflare.md

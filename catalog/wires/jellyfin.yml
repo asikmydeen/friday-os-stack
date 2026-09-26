@@ -1,0 +1,25 @@
+# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# Describes how Friday attaches to Jellyfin once it is installed via the
+# "Movies and TV" bundle (see docs/apps.md). The Compose template itself
+# still comes from the pinned catalog snapshot (see catalog/PIN), not from
+# this file.
+
+id: jellyfin
+category: media-server
+conflicts_primary_with: [plex]
+
+storage:
+  - { volume: library, sub: movies, mount: /data/movies, read_only: true }
+  - { volume: library, sub: tv, mount: /data/tv, read_only: true }
+  - { volume: jellyfin_config, mount: /config }
+
+ports:
+  - { host: 127.0.0.1:8096, container: 8096 }  # host loopback only; a public
+                                                 # name needs a separate,
+                                                 # later publication approval
+
+wires:
+  health: { url: http://jellyfin:8096/health, via: executor on the apps network }
+  secrets: [JELLYFIN_URL, JELLYFIN_API_KEY]
+  agents: [media]
+  webhook: { from: jellyfin, to: http://webhooks:8080/media }

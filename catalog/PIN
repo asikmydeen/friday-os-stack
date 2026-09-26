@@ -1,3 +1,11 @@
-# Pinned commit of https://github.com/truenas/apps that this catalog snapshot
-# is rendered from. Empty until the catalog snapshot step lands
-# (see README "Build order", step 6).
+# Pinned commit of https://github.com/truenas/apps this catalog renders
+# against. Not filled in yet — this repo is at build-order step 4
+# (experimental source snapshot); the catalog-render pipeline is step 5+.
+#
+# Format once populated:
+#   commit: <full 40-char sha>
+#   trains: [stable, community]
+#   pinned_at: <date>
+#
+# LGPL-3.0. This file records a pin only — the upstream tree is never
+# copied into this repo's git history.

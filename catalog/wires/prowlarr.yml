@@ -1,0 +1,19 @@
+# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# Part of the "Movies and TV" bundle (docs/apps.md). Indexer manager that
+# fans searches out to Radarr and Sonarr; starts with zero indexers.
+
+id: prowlarr
+category: media-management
+
+storage:
+  - { volume: prowlarr_config, mount: /config }
+
+ports:
+  - { host: 127.0.0.1:9696, container: 9696 }
+
+wires:
+  health: { url: http://prowlarr:9696/ping, via: executor on the apps network }
+  secrets: [PROWLARR_URL, PROWLARR_API_KEY]
+  agents: [fetcher]
+  # Points at Radarr and Sonarr with full sync on install; the operator adds
+  # indexers in Prowlarr's own UI and the sync carries them downstream.

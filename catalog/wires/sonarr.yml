@@ -1,0 +1,21 @@
+# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# Part of the "Movies and TV" bundle (docs/apps.md). TV-show sibling of
+# radarr.yml — same quality-profile and webhook rules apply.
+
+id: sonarr
+category: media-management
+
+storage:
+  - { volume: library, sub: downloads, mount: /downloads }
+  - { volume: library, sub: tv, mount: /tv }
+  - { volume: sonarr_config, mount: /config }
+
+ports:
+  - { host: 127.0.0.1:8989, container: 8989 }
+
+wires:
+  health: { url: http://sonarr:8989/ping, via: executor on the apps network }
+  secrets: [SONARR_URL, SONARR_API_KEY]
+  agents: [fetcher]
+  webhook: { from: sonarr, to: http://webhooks:8080/arr }
+  quality_profile_order: worst-first
