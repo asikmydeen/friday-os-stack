@@ -1,0 +1,14 @@
+friday-os-stack
+Copyright 2026 Asik Mydeen
+
+This product bundles or references third-party components with separate
+copyright notices and license terms. Your use of those components is subject
+to the terms and conditions of the respective licenses.
+
+- Qdrant (Apache-2.0) — https://github.com/qdrant/qdrant
+- Ollama, with the `nomic-embed-text` model — https://ollama.com
+- The app catalog under catalog/ is rendered from a pinned snapshot of
+  https://github.com/truenas/apps (see catalog/PIN for the commit).
+
+This is an early, experimental scaffold. This NOTICE will be expanded with
+exact versions and license texts before any tagged release.

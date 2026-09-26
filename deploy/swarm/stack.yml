@@ -1,0 +1,5 @@
+# EXPERIMENTAL placeholder for a single-node Docker Swarm deployment.
+# One replica only — the SQLite-backed friday service must never run two
+# copies against the same data volume. Not implemented/tested yet; see
+# README "Build order", step 8, and ../../compose.yml for the source of truth
+# this file should be translated from.

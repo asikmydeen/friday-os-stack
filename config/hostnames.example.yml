@@ -1,0 +1,16 @@
+# Example only — no real hostnames. Copy and edit to config/hostnames.yml.
+#
+# Maps a logical name to the container/service each request should reach.
+# This is consumed by the gateway container; nothing here is wired up yet.
+
+friday:
+  service: friday
+  port: 8080
+
+board:
+  service: board
+  port: 8080
+
+jellyfin:
+  service: jellyfin
+  port: 8096

@@ -1,0 +1,83 @@
+# EXPERIMENTAL — this file is a scaffold, not a tested compose stack.
+# `docker compose up` against this file will not produce a working Friday instance yet:
+# the `friday`, `board`, and `memory-mcp` images referenced below are placeholders
+# and are not published anywhere. See README.md "Build order".
+
+name: friday-os-stack
+
+x-common: &common
+  restart: unless-stopped
+  networks: [core]
+
+services:
+  # --- profile: core ---
+  qdrant:
+    <<: *common
+    image: qdrant/qdrant:latest
+    profiles: [core, chat]
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  ollama:
+    <<: *common
+    image: ollama/ollama:latest
+    profiles: [core, chat]
+    volumes:
+      - ollama_data:/root/.ollama
+
+  postgres:
+    <<: *common
+    image: postgres:16-alpine
+    profiles: [core, chat]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/memories.sql:/docker-entrypoint-initdb.d/memories.sql:ro
+
+  memory-mcp:
+    <<: *common
+    image: friday-os-stack/memory-mcp:unreleased
+    profiles: [core, chat]
+    depends_on: [postgres, qdrant]
+
+  # --- profile: chat ---
+  friday:
+    <<: *common
+    image: friday-os-stack/friday:unreleased
+    profiles: [chat]
+    env_file: .env
+    depends_on: [qdrant, ollama, memory-mcp]
+    volumes:
+      - friday_data:/data
+      - ./soul:/soul:ro
+      - ./charters:/soul/agents:ro
+
+  board:
+    <<: *common
+    image: friday-os-stack/board:unreleased
+    profiles: [chat]
+    env_file: .env
+    depends_on: [friday]
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  # --- profile: code (optional) ---
+  # Taskrunner against an external Coder. Not included in the first image.
+
+  # --- profile: edge (optional) ---
+  # Cloudflare tunnel. Off unless CLOUDFLARE_ENABLED=1.
+
+  # --- profile: mesh (optional) ---
+  # Headscale. Off unless HEADSCALE_ENABLED=1.
+
+networks:
+  core:
+
+volumes:
+  qdrant_data:
+  ollama_data:
+  postgres_data:
+  friday_data:
