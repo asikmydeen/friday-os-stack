@@ -13,7 +13,11 @@ ports:
   - { host: 127.0.0.1:8123, container: 8123 }
 
 wires:
-  health: { url: http://home-assistant:8123/api/, via: executor on the apps network }
+  # GET /api/ returns 401 without a long-lived token. The probe sends it.
+  health:
+    url: http://home-assistant:8123/api/
+    via: executor on the apps network
+    auth: { type: bearer, secret: HOME_ASSISTANT_TOKEN }
   secrets: [HOME_ASSISTANT_URL, HOME_ASSISTANT_TOKEN]  # long-lived token
   agents: [home]
   tools: [home_status, home_control]  # granted to the home charter only

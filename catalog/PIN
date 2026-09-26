@@ -1,6 +1,7 @@
 # Pinned commit of https://github.com/truenas/apps this catalog renders
 # against. Not filled in yet — this repo is at build-order step 4
-# (experimental source snapshot); the catalog-render pipeline is step 5+.
+# (experimental source snapshot). Step 5 is the executor. The catalog-render
+# pipeline and the first allowlisted wires are step 6 (README "Build order").
 #
 # Format once populated:
 #   commit: <full 40-char sha>

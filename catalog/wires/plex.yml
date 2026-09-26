@@ -1,6 +1,7 @@
 # EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
-# Alternative primary player in the "Movies and TV" bundle (docs/apps.md).
-# Only one of jellyfin/plex is marked primary at a time; both can be healthy.
+# Alternative player in the "Movies and TV" bundle (docs/apps.md).
+# The bundle installs this app only when the operator chose Plex.
+# conflicts_primary_with names the other choice; it is not installed alongside.
 
 id: plex
 category: media-server
@@ -15,8 +16,9 @@ ports:
   - { host: 127.0.0.1:32400, container: 32400 }
 
 questions:
-  - { id: claim_token, kind: secret }  # one-time Plex claim; server token is
-                                        # stored after first successful claim
+  # Asked only when the Movies and TV bundle chose Plex. A Jellyfin install
+  # does not include this app and does not ask for a claim token.
+  - { id: claim_token, kind: secret, when: chosen_player }
 
 wires:
   health: { url: http://plex:32400/identity, via: executor on the apps network }

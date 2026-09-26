@@ -21,20 +21,20 @@
 | `friday_persona` | bootstrap | Stable traits the persona pass extracts | Owner portrait questions |
 | `knowledge` | bootstrap | Decisions/docs the operator asks to keep, tagged with a `topic` | Hub search for every owner turn |
 | `cabinet_working` | bootstrap | A role's scratch notes for the current turn/session | That role only — a search without an owner filter is refused |
-| `role_profile_<role_id>` | first time that role remembers something worth keeping | That role's durable working notes | That role's own gather/recall |
+| `role_profile_<role_id>` | first time that role remembers something worth keeping | That role's durable notes | That role only — a search without an owner filter is refused |
 | `person_profile_<person_id>` | first time that person is added | That person's notes | That person's own turns |
 | `person_episodes_<person_id>`, `person_persona_<person_id>` | same moment | That person's episodes/traits | That person's own turns |
 
-`cabinet_working` and `role_profile_<role_id>` are not the same thing even
-though both hold "a role's working notes": `cabinet_working` is created at
-bootstrap and is where a role's notes live before that role has ever
-remembered anything durable; `role_profile_<role_id>` is created lazily,
-the first time that role's advisor calls remember, and is where a promoted,
-durable note for that role ends up. The same split exists between
-`friday_*` (bootstrap, the owner's own notes) and `person_profile_<person_id>`
-(lazy, a second person's notes) — for the first release, with exactly one
-owner and no second person yet, `friday_*` is the only one of that pair
-that actually has any data in it.
+`cabinet_working` and `role_profile_<role_id>` are different stores.
+`cabinet_working` is created at bootstrap and holds scratch notes for the
+current turn. `role_profile_<role_id>` is created the first time that role
+keeps a durable note. A search of either store without an owner filter is
+refused. The same split exists between `friday_*` (bootstrap, the owner's
+own notes) and `person_profile_<person_id>` (lazy, a second person's notes).
+For the first release, with exactly one owner and no second person yet,
+`friday_*` is the only one of that pair that has any data in it. A role id
+and a person id are different collection names (`role_profile_` versus
+`person_profile_`) even when the id text matches.
 
 `family_shared` is not created by bootstrap and does not exist on a fresh
 install. Pooled memory shared across household members is opt-in, not a
@@ -58,51 +58,66 @@ later release, gated on these isolation tests passing.
 ## Delete/update race safety
 
 One worker at a time holds a per-memory lock, from the moment it claims an
-indexing-queue item until Qdrant has been updated. The claim is a
-conditional update (`revision` and `deleted_at` checked in the same
-statement), never a read followed by a later write. A missing Qdrant point
-is never read as proof a memory is alive — upsert would just insert it.
-Under the lock: a live row whose revision still matches becomes an upsert;
-a row with `deleted_at` set becomes a delete, with no upsert sent; if the
-revision moved before the claim, the item is dropped. After Qdrant returns,
-the same lock re-checks Postgres and deletes the point if a tombstone won,
-before releasing the lock. This has to hold even when the point was already
-gone before a late upsert arrives, and even when an earlier revision's
-write completes after a later revision's write.
+indexing-queue item until Qdrant has been updated. `memory_index_claim`
+does that with a conditional update: the `memories` row is locked only when
+`revision` still matches the queue item, in the same statement, never as a
+read followed by a later write. A missing Qdrant point is never read as
+proof a memory is alive — upsert would just insert it. Under the lock: a
+live row whose revision still matches becomes an upsert; a row with
+`deleted_at` set becomes a delete, with no upsert sent; if the revision
+moved before the claim, the queue item is marked done and dropped. After
+Qdrant returns, the worker re-checks the row under that same lock and
+deletes the point if a tombstone won, then calls `memory_index_finish`
+before the lock is released. A worker that committed the claim and then died is
+reclaimable after 5 minutes (`done_at` still null). This has to hold even
+when the point was already gone before a late upsert arrives, and even when
+an earlier revision's write completes after a later revision's write.
 
 ## `sql/memories.sql` columns
 
 `id`, `owner_id`, `owner_kind`, `revision`, `content`, `title`, `tags`,
 `category`, `pinned`, `visibility` (`master`, `working`, `promoted`),
 `index_state`, `deleted_at`, `promoted_from`, `promoted_at`, `created_at`,
-`updated_at`. Writing the same content for the same owner (and category)
-updates that row and increments `revision` rather than inserting a
-duplicate; this is enforced by a real unique index on
-`(owner_id, category, content)`, not just described in prose. `category`
-defaults to the empty string rather than SQL `NULL` specifically so that
-key can't silently stop deduplicating for every row that never sets a
-category — Postgres treats two `NULL`s in a unique index as distinct rows.
+`updated_at`. Callers write through `memory_save`. A second save of the
+same live identity — `owner_id`, `owner_kind`, `visibility`, `category`,
+and content — updates that row and increments `revision`. The unique index
+that enforces it is `(owner_id, owner_kind, visibility, category, md5(content))`
+where `deleted_at` is null. The hash is the indexed value because a btree
+entry cannot exceed about 2704 bytes, and a note of a few paragraphs would
+otherwise fail the insert. `category` defaults to `''` rather than SQL
+`NULL`, because two `NULL`s are distinct in a unique index and the dedup
+would silently stop. A raw `INSERT` of a duplicate raises `unique_violation`;
+it does not bump `revision`. That bump lives in `memory_save`.
 
-`memory_index_queue` is a separate table, not a column on `memories`. The
-row and its queue item commit in the same transaction; a worker claims the
-oldest unclaimed item and, inside that claim, conditionally updates
-`memories` only if `revision` still matches what the queue item was
-created against. `index_state` on `memories` is a status label for display,
-not the work list — a tombstoned row (`deleted_at` set) still owes a
-Qdrant delete, so filtering work by `deleted_at IS NULL` would hide
-exactly the rows that still need that delete to run.
+A promoted copy is a second live row: `memory_save` with
+`visibility = 'promoted'` and `promoted_from` set to the working row.
+Visibility is part of the unique key, so the copy is not collapsed into
+the row it came from. `owner_kind` is part of the key for the same reason
+a person and a role must not share a row when their id text matches.
 
-This file is applied with `CREATE TABLE IF NOT EXISTS`, which only runs
-Postgres's init scripts on an empty data directory. An existing volume
-from an older column layout (for example, one with `person_id`/`kind`
-instead of `owner_id`/`owner_kind`) is never migrated by this file; it has
-to be migrated explicitly first, or the new `owner_id` index and unique key
-simply fail against data that predates them. `owner_id` is documented as
-immutable, but nothing in the schema itself prevents an `UPDATE` from
-changing it — that has to hold at the application layer. Friday's own notes
-(`friday_*`) are expected to set `visibility = 'master'` explicitly; the
-schema's `working` default is for role/person working notes, not for
-Friday's own writes.
+`memory_index_queue` is a separate table. The memory row and its queue item
+commit in the same transaction: an insert trigger, and an update trigger
+that runs when `revision` changes, insert `(memory_id, revision)`, which
+is unique. A worker
+calls `memory_index_claim(worker)`. The claim takes the oldest row with
+`done_at` null whose `claimed_at` is null or older than 5 minutes, then
+conditionally updates `memories` only when `revision` still matches. The
+returned `deleted_at` tells the worker whether Qdrant gets an upsert or a
+delete. A revision mismatch marks that queue item done and the claim moves
+on. `memory_index_finish` sets `done_at` after Qdrant returns. `index_state`
+is a display label, not the work list. The queue's foreign key is
+`ON DELETE RESTRICT`, so a hard delete cannot throw away a Qdrant delete
+that has not finished. Soft delete is `memory_tombstone`.
+
+`visibility` has no default. Friday's own notes pass `'master'`. Role and
+person working notes pass `'working'`. A `BEFORE UPDATE` trigger rejects
+any change to `owner_id` or `owner_kind`.
+
+This file is applied from Postgres init, which runs only on an empty data
+directory. An existing volume — an older `person_id`/`kind` layout, or an
+earlier draft of this file that indexed raw `content` or omitted `done_at` —
+is not migrated by applying the script again. Recreate `postgres_data`, or
+migrate that volume explicitly, before expecting these indexes and functions.
 
 ## Backup
 

@@ -10,10 +10,16 @@ storage:
   - { volume: qbittorrent_config, mount: /config }
 
 ports:
-  - { host: 127.0.0.1:8080, container: 8080 }
+  # Host 8080 is the Board (compose.yml). The container still listens on 8080.
+  - { host: 127.0.0.1:8081, container: 8080 }
 
 wires:
-  health: { url: http://qbittorrent:8080/api/v2/app/version, via: executor on the apps network }
+  # /api/v2/app/version returns 403 until a WebUI session exists. The
+  # executor logs in with these secrets, then GETs the version URL.
+  health:
+    url: http://qbittorrent:8080/api/v2/app/version
+    via: executor on the apps network
+    auth: { type: qbittorrent_login, user_secret: QBITTORRENT_USER, password_secret: QBITTORRENT_PASSWORD }
   secrets: [QBITTORRENT_URL, QBITTORRENT_USER, QBITTORRENT_PASSWORD]
   agents: [fetcher]
   categories: [radarr, sonarr]  # matches the categories Radarr/Sonarr are

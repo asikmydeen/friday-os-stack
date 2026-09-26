@@ -1,20 +1,21 @@
 # EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
 # Optional add-on that attaches to Radarr/Sonarr for subtitle fetching.
 # Not part of the base "Movies and TV" bundle; installed separately.
+# Movies and TV are read-write: Bazarr writes .srt files next to the media.
 
 id: bazarr
 category: media-management
 
 storage:
-  - { volume: library, sub: movies, mount: /movies, read_only: true }
-  - { volume: library, sub: tv, mount: /tv, read_only: true }
+  - { volume: library, sub: movies, mount: /movies }
+  - { volume: library, sub: tv, mount: /tv }
   - { volume: bazarr_config, mount: /config }
 
 ports:
   - { host: 127.0.0.1:6767, container: 6767 }
 
 wires:
-  health: { url: http://bazarr:6767/ping, via: executor on the apps network }
+  health: { url: http://bazarr:6767/api/system/ping, via: executor on the apps network }
   secrets: [BAZARR_URL, BAZARR_API_KEY]
   agents: [fetcher]
   attaches_to: [radarr, sonarr]

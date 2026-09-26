@@ -1,21 +1,26 @@
 # EXPERIMENTAL — bundle draft, not implemented or tested yet.
-# The "Movies and TV" bundle described in docs/apps.md. Bundling these ids
-# together and answering "Jellyfin or Plex" is the one question the operator
-# sees; everything below that is applied automatically once approved.
+# The "Movies and TV" bundle described in docs/apps.md. The operator answers
+# one question, Jellyfin or Plex. Only that player is installed. The other
+# is left out, and Plex's claim token is asked only when Plex was chosen.
 
 id: movies-tv
 kind: bundle
 question:
   id: player
   choices: [jellyfin, plex]
-  default: jellyfin  # the stack can create Jellyfin's API key locally;
-                      # Plex needs a one-time claim token from the operator
+  default: jellyfin  # Jellyfin's API key is minted locally.
+                      # Choosing Plex asks for the claim token on plex.yml.
+  installs: chosen_only
 
-apps: [jellyfin, plex, qbittorrent, prowlarr, radarr, sonarr]
+apps:
+  always: [qbittorrent, prowlarr, radarr, sonarr]
+  one_of: player
 
 wiring:
-  # Applied by the executor as one approved operation, in this order:
-  - generate_api_keys: [radarr, sonarr, prowlarr, qbittorrent]
+  # Applied by the executor as one approved operation, in this order.
+  # qBittorrent has a username and password, not an API key.
+  - generate_api_keys: [radarr, sonarr, prowlarr]
+  - generate_credentials: { qbittorrent: [QBITTORRENT_USER, QBITTORRENT_PASSWORD] }
   - point: { radarr: qbittorrent, category: radarr }
   - point: { sonarr: qbittorrent, category: sonarr }
   - point: { prowlarr: [radarr, sonarr], full_sync: true }

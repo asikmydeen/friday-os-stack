@@ -27,10 +27,12 @@ Fill in `.env`:
 - `OWNER_NAME`, `OWNER_TIMEZONE` — your own values, not a placeholder.
 - Exactly one model provider block (`MODEL_API_KEY`, `MODEL_BASE_URL`,
   `MODEL_THINK`, `MODEL_FAST`).
-- Leave `POSTGRES_PASSWORD` and `BOARD_PASSWORD` blank for now if you're
-  just reading code — nothing here mints or checks them yet (see "What
-  works today" below). Do not put a real production password in this repo's
-  `.env`; it lives only on your machine and is already gitignored.
+- `BOARD_PASSWORD` may stay blank while you are only reading code — nothing
+  here checks it yet. `POSTGRES_USER` may stay blank (the Postgres image
+  then uses `postgres`). `POSTGRES_PASSWORD` must be a non-empty local
+  value before the infra command below; the image exits on startup when it
+  is empty. Do not put a real production password in `.env`. It lives only
+  on your machine and is already gitignored.
 - Leave `MATTERMOST_ENABLED`, `CLOUDFLARE_ENABLED`, `HEADSCALE_ENABLED` at
   `0` unless you are specifically working on one of those optional doors.
 
@@ -63,6 +65,7 @@ exist in this repo yet, most contributions fall into one of these buckets:
    develop against them directly, without the `friday`/`board` images:
 
    ```bash
+   # .env must contain a non-empty POSTGRES_PASSWORD or postgres exits.
    docker compose --profile core up qdrant ollama postgres
    ```
 

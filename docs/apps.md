@@ -56,8 +56,16 @@ A "Movies and TV" bundle wires several apps together against one shared
 | Path | Who writes | Who reads |
 |---|---|---|
 | `library/downloads` | qBittorrent | Radarr, Sonarr |
-| `library/movies` | Radarr | Jellyfin / Plex |
-| `library/tv` | Sonarr | Jellyfin / Plex |
+| `library/movies` | Radarr | Jellyfin or Plex |
+| `library/tv` | Sonarr | Jellyfin or Plex |
+| subtitle files under `library/movies` and `library/tv` | Bazarr, optional and not in the base bundle | Jellyfin or Plex |
+
+The bundle asks one question, Jellyfin or Plex, and installs only the
+player that was chosen. The other player is not installed, and Plex's
+claim token is asked only when Plex was chosen. qBittorrent, Prowlarr,
+Radarr, and Sonarr are always part of the bundle. Bazarr is a separate
+wire: it writes subtitle files into the movie and TV directories, so those
+mounts are read-write.
 
 Only the Fetcher and Media advisors are granted the download-client and
 player tools respectively — no other advisor gets them.

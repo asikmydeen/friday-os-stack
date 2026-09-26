@@ -44,11 +44,18 @@ job descriptions, not people.
 Only charter files directly under `charters/<id>.md` are active: Friday's
 compose service bind-mounts `./charters` (not `./charters/full`) to
 `/soul/agents`, and Compose has no way to union two host directories onto
-one container path. Enabling a full-pack role therefore means copying (or
-symlinking) that one file from `charters/full/` into `charters/`, not
-repointing the mount — repointing it at `./charters/full` instead would
-drop the starter set (`chief`, `cto`, `cfo`, `coach`, `home`, `media`)
-entirely, since none of those files live under `full/`.
+one container path. Enabling a full-pack role means copying that file to
+`charters/<id>.md`, or symlinking it with a relative target that stays
+inside the mount:
+
+```bash
+ln -s full/<id>.md charters/<id>.md
+```
+
+That target resolves in the container to `/soul/agents/full/<id>.md`. An
+absolute host path does not resolve there. Repointing the mount at
+`./charters/full` would drop the starter set (`chief`, `cto`, `cfo`,
+`coach`, `home`, `media`), since none of those files live under `full/`.
 
 ## Tool grants
 

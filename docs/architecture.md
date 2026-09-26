@@ -33,9 +33,9 @@ flowchart TB
   Memory --> Pg
   Friday --> Soul
   Board --> Friday
-  Exec --> Gateway
   Friday --> Gateway
   Gateway --> Apps
+  Exec --> Apps
 ```
 
 Left out of core on purpose: Mattermost, Telegram, media servers (Plex,
@@ -89,13 +89,13 @@ Two Compose networks separate the trusted core from anything optional:
 | `apps` | Optional apps, the webhook receiver, and an integration gateway |
 
 The executor sits on both networks so it can health-check an app by its
-Compose DNS name and container port. Friday itself is **not** on the `apps`
-network. Advisors reach an app only through the same gateway process that
-sits on both networks and allows only the method and path a wire file names
-for that advisor — the diagram above shows Friday's request to an app
-routed through that gateway, not straight to the app, and shows the
-executor reaching the gateway rather than the app container directly. An
-app container cannot open Postgres, Qdrant, or the executor's control
+Compose DNS name and container port, and so an approved operation can
+reach that container directly. Friday itself is **not** on the `apps`
+network. Advisors reach an app only through the gateway, which also sits
+on both networks and allows only the method and path a wire file names
+for that advisor. The diagram shows that split: Friday's request goes
+through the gateway, and the executor's health check goes to the app.
+An app container cannot open Postgres, Qdrant, or the executor's control
 port; that boundary is meant to be a test, not just a design intent, but
 no such test exists yet — there is no executor, gateway, or `apps` network
 in this repo today.

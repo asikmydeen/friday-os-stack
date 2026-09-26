@@ -25,7 +25,7 @@ friday-os-stack/
     full/                  larger inactive advisor pack (copy in what you need)
   soul/SOUL.example.md     short character file the operator edits
   scripts/
-    bootstrap.sh           writes .env, then runs the memory bootstrap
+    bootstrap.sh           writes .env from the example if missing, then exits
     bootstrap-memory.sh    waits for Qdrant and Ollama, creates collections, checks 768 dims
     bootstrap-mattermost.py generalized Mattermost setup
   sql/

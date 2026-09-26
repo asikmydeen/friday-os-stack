@@ -23,12 +23,14 @@ network's path to any public hostname.
 
 ## Config
 
-`config/hostnames.example.yml` starts empty (see the actual example file for
-the shape). The owner adds one name at a time. The console and the Board are
-the only core candidates for a public hostname, and only after the access
-check above has been verified. A tunnel is created only after that check
-passes, and is torn down cleanly if the check ever starts failing — nothing
-stays exposed just because the tunnel container happens to still be running.
+`config/hostnames.example.yml` shows the file shape with three sample
+entries (`friday`, `board`, `jellyfin`). Those names are examples, not
+routes this stack publishes. The owner copies the file and adds one real
+name at a time. The console and the Board are the only core candidates for
+a public hostname, and only after the access check above has been verified.
+A tunnel is created only after that check passes, and is torn down cleanly
+if the check ever starts failing — nothing stays exposed just because the
+tunnel container happens to still be running.
 
 This stack never calls the Cloudflare API to buy or attach a domain; the
 operator brings their own zone and tunnel token.

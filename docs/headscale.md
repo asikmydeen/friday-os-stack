@@ -8,10 +8,12 @@ public tunnel.
 
 ## Setup
 
-Profile `mesh` runs Headscale plus a small HTTPS proxy for its control URL.
-The operator sets `HEADSCALE_URL` to a name that profile `edge` already
-serves, or to a name they terminate themselves — this repo does not run a
-Headscale control server it also owns the DNS for.
+`compose.yml` has no `mesh` services yet. That profile is build-order
+step 7. When it lands, it runs Headscale plus a small HTTPS proxy for its
+control URL. `HEADSCALE_URL` is reserved in `.env.example` and nothing in
+this repo reads it today. The operator will set it to a name that profile
+`edge` already serves, or to a name they terminate themselves. This repo
+does not run a Headscale control server it also owns the DNS for.
 
 The intended guide (to be written once this profile lands) walks the
 operator through creating one user and pre-auth keys only for machines they
