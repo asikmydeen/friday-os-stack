@@ -11,8 +11,7 @@ repo today actually looks like, plus what changes once each step lands.**
   `MODEL_BASE_URL` at (see `.env.example`). This stack does not ship a
   chat-sized local model.
 - Python 3.11+ if you're working on `scripts/bootstrap-mattermost.py` or any
-  future Python tooling in this repo. Nothing here is pinned to 3.11 the
-  way the private Friday process is, but matching it avoids surprises.
+  future Python tooling in this repo.
 - `git` and (optionally) the GitHub CLI (`gh`) if you're opening PRs.
 
 ## First-time setup
@@ -87,12 +86,8 @@ trufflehog filesystem .
 Never commit `.env`, a real hostname, a real API key, or any file from the
 "must never be committed" list in `docs/secrets.md`.
 
-## Where the authoritative plan lives
+## Where the plan lives
 
-This repo intentionally carries only a compressed, generic version of the
-plan. If you need the full detailed design (executor internals, USB image
-build, per-service env var lists, migration/rollback semantics) — that's in
-the private `friday-architecture` repo's `plans/OPEN_SOURCE_ONBOARDING.md`
-and isn't duplicated here. Open an issue if a doc in this repo is missing
-context you need to contribute; docs get expanded deliberately, section by
-section, as each build-order step actually lands (see README "Build order").
+`README.md` ("Build order") and `docs/` are the plan for this project.
+Open an issue if a doc is missing context you need to contribute. Docs
+grow as each build-order step lands.

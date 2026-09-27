@@ -13,9 +13,8 @@
 -- this script. Recreate that volume, or migrate it explicitly, before
 -- relying on the functions below.
 --
--- This is a stub written for this public scaffold; it is not exported
--- verbatim from the private memory-mcp repository. Treat it as a starting
--- point to refine once memory-mcp is generalized into this stack
+-- This schema is the contract memory_save writes in this repository.
+-- The service that calls it is not implemented yet
 -- (see README.md "Build order", step 1).
 
 CREATE TABLE IF NOT EXISTS memories (

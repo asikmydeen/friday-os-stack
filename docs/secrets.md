@@ -28,8 +28,7 @@ silently running with an open dashboard.
 
 - Integrations (external APIs, app credentials) store a reference to a
   secret (`secret_ref`), never the secret value itself, alongside the
-  object that uses it. This mirrors the private repo's rule for
-  `brain/connections/`.
+  object that uses it.
 - An app-specific secret (a Radarr API key, a Home Assistant long-lived
   token, a Plex claim token) is created or pasted at install time and
   stored in the secrets volume, referenced by name from the app registry.
@@ -43,7 +42,7 @@ silently running with an open dashboard.
 - `bridge.json` or any Mattermost/tunnel/mesh credential file
 - Any real API key, tunnel token, or Headscale pre-auth key
 - `friday.sqlite3`, a Qdrant snapshot, or a Postgres dump
-- The live soul directory or any real family/owner-specific fact
+- A filled-in soul file, or any real household fact
 
 A secret scan (`gitleaks` or `trufflehog`) is expected to run clean on this
 tree before any push that touches `scripts/`, `compose.yml`, or `.env.example`.

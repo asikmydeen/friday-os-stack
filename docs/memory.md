@@ -144,5 +144,5 @@ manifest — restoring the core never rolls optional apps backward.
 6. Write one smoke-test point, search it back above a score threshold,
    delete it, and only then exit 0.
 
-This document will be filled in with the concrete API once memory-mcp is
-generalized for this stack (see README "Build order", step 1).
+The service that performs these steps is not implemented yet. The sequence
+above is the contract it has to follow (see README "Build order", step 1).

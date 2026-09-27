@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """EXPERIMENTAL placeholder.
 
-Intended to generalize the private repo's Mattermost bootstrap (team, board
-channel, bot account, webhook) for the optional `chat`-adjacent Mattermost
-door described in README "Build order", step 2. Not implemented yet.
+Optional Mattermost door described in README "Build order", step 2:
+create a team, a board channel, a bot account, and a webhook.
+Not implemented yet.
 """
 
 import sys

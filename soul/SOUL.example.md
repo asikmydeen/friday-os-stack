@@ -1,8 +1,8 @@
 # SOUL.example.md
 
-This is the short character file the operator edits after first boot. It replaces the
-live, family-specific soul file used in the private production instance — no real
-names, faith practice, health, or location details belong here.
+This is the short character file the operator edits after first boot.
+Use the placeholders below. Real names, health details, and locations
+do not belong in this example.
 
 ## Who I am
 
