@@ -6,6 +6,9 @@ This is the open-source Friday appliance: a small always-on box that runs a chat
 
 The docs in this repository are the plan. Nothing here points at a running server.
 
+For the picture of the systems, what each one is for, and what this
+repository implements today, see [docs/system.md](docs/system.md).
+
 ## What this is not (yet)
 
 - Not a bootable USB image.
@@ -31,6 +34,7 @@ friday-os-stack/
   sql/
     memories.sql           Postgres table memory_save writes to
   docs/
+    system.md              systems, capabilities, and what is implemented
     architecture.md
     memory.md              collections, payloads, backup, second speaker
     agents.md

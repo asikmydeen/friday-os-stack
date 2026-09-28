@@ -2,6 +2,9 @@
 
 **Status: draft. This describes the target design, not a built system.**
 
+The customer-facing picture of the same target, including what this
+repository implements today, is [system.md](system.md).
+
 ## Two layers
 
 | Layer | Rule |
