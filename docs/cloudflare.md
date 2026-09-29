@@ -3,10 +3,13 @@
 **Status: draft, not implemented in this repo yet.**
 
 Off by default (`CLOUDFLARE_ENABLED=0`). The first release ships with no
-tunnel at all. The Board is the only host page, at `127.0.0.1:8080`.
-Friday has no host port. A tunnel is a path to the Board, not a login,
-so turning one on later is treated as a security-sensitive change, not a
-convenience toggle.
+tunnel at all. The way the owner reaches Friday from a phone is the
+mesh in [headscale.md](headscale.md), which opens the Board on a private
+network. A messaging door delivers turns and cannot approve. A tunnel
+is the later path for a network that is not on that mesh. It reaches
+the Board only. It is not a login, and it is not a path to Friday's
+container, so turning one on is a security-sensitive change. The Board
+is the only host page, at `127.0.0.1:8080`. Friday has no host port.
 
 ## Rule before any hostname is added
 

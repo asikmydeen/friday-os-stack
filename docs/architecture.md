@@ -9,15 +9,17 @@ repository implements today, is [system.md](system.md).
 
 | Layer | Rule |
 |---|---|
-| **Core** | Always installed, small RAM footprint, cannot be removed. Nothing in this repo is wired to memory or the app executor yet — this table describes the target, not the current state of the code. |
-| **Optional apps** | A menu rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus a few project-specific optional pieces (Mattermost, Taskrunner, Cloudflare tunnel, Headscale). An id installs only when it is on the allowlist, has a wire, and has passed a render test. Nothing in this layer starts until the owner approves that exact operation. |
+| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. Nothing in this repo is wired to memory or the executor yet — this table describes the target, not the current state of the code. |
+| **Agent reach** | Part of the product, off until the owner turns each piece on. The messaging door, the mesh, MCP in both directions, and the browser session. None of these is a catalog app, and none of them can mint an approval. |
+| **Optional apps** | Guests, not the front of the product. A menu rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus Mattermost, Taskrunner, and a Cloudflare tunnel. An id installs only when it is on the allowlist, has a wire, and has passed a render test. Nothing in this layer starts until the owner approves that exact operation. |
 
 ```mermaid
 flowchart TB
   subgraph host [small Linux host plus Docker]
     subgraph core [core, always on]
-      Friday[Friday chat process]
+      Friday[Friday]
       Board[Board]
+      Tasks[task journal]
       Qdrant[Qdrant]
       Embed[embed model only]
       Memory[memory-mcp]
@@ -25,7 +27,13 @@ flowchart TB
       Soul[soul volume]
       Exec[app executor]
     end
-    subgraph optional [optional, installed by asking]
+    subgraph reach [agent reach, off until enabled]
+      Door[messaging door]
+      Mesh[mesh peers]
+      Mcp[MCP listener]
+      Browser[browser session]
+    end
+    subgraph optional [guests, installed by asking]
       Gateway[integration gateway]
       Apps[Catalog apps]
     end
@@ -35,20 +43,28 @@ flowchart TB
   Memory --> Qdrant
   Memory --> Embed
   Friday --> Soul
+  Friday --> Tasks
   Board --> Friday
+  Door --> Friday
+  Mesh --> Board
+  Mesh --> Mcp
+  Friday --> Mcp
+  Friday --> Browser
   Friday --> Gateway
   Gateway --> Apps
   Exec --> Apps
 ```
 
-Left out of core on purpose: Mattermost, Telegram, media servers (Plex,
-Jellyfin), the `*arr` stack, Home Assistant, Coder/Taskrunner, Cloudflare,
-Headscale, and any chat-sized local language model. Those are optional
-apps installed only after the core boots and the owner approves them one
-at a time. A template that needs host networking, host PID, host IPC, or
-a device or capability the reviewed manifest does not list is refused and
-stays listed. The first candidates are one media player and Home
-Assistant.
+Off until the owner turns them on: the messaging door, the mesh, MCP
+grants, and the browser session. Those are the agent, not optional apps.
+Left out of the product's front on purpose: Mattermost as a required
+room, media servers (Plex, Jellyfin), the `*arr` stack, Home Assistant,
+Coder/Taskrunner, a public tunnel, and any chat-sized local language
+model. A catalog app is installed only after the core boots and the
+owner approves that one app. A template that needs host networking,
+host PID, host IPC, or a device or capability the reviewed manifest
+does not list is refused and stays listed. The first catalog guests,
+after the agent path exists, are one media player and Home Assistant.
 
 ## Core pieces
 
@@ -61,21 +77,25 @@ Assistant.
 | memory-mcp + Postgres | The durable `memories` row, id shared with the Qdrant point. Holds the Qdrant key and applies the owner filter. Friday does not. | One small database |
 | Soul volume + Friday SQLite | Character, charters, conversations, obligations | Files on disk |
 | App executor | A process separate from the chat process. Accepts a named operation only when an approval record matches it exactly — never a raw shell string or an arbitrary Compose file. | One small container, no model and no page fetcher |
+| Task journal | Goals that outlive a turn, and the machine operations above. Same crash rule: resume the journal, never mint a second approval. | Rows next to the operation journal |
 
-## The key boundary: chat never mutates infrastructure directly
+## The key boundary: chat never performs the action
 
-Anything that changes state outside of chat — installing an app, changing a
-grant, running a backup — goes through the executor, and only through a
-pre-approved, exact-match operation record. A model argument such as
-`confirmed=true` is never sufficient; the approval record is created by the
-owner on the Board, after authenticating with the Board password, and
-the chat process cannot create or exchange it itself.
+Anything that sends, pays, deletes, publishes, or changes the machine
+goes through an approval record. Installing an app, changing a grant,
+and running a backup also go through the executor. A model argument
+such as `confirmed=true` is never sufficient. The approval record is
+created by the owner on the Board, after authenticating with the Board
+password. The chat process, a messaging door, and an outside MCP caller
+cannot create or exchange it.
 
-An approval record stores: the operation name, the app id, the reviewed
-manifest version (catalog pin, template hash, rendered digest), the image
-digest, the canonical mount list, the ports, the privileges, the devices, and
-the network mode. It expires after a short window and can be exchanged once.
-Any change to those fields voids the record.
+A machine approval stores the operation name, the app id, the reviewed
+manifest version (catalog pin, template hash, rendered digest), the
+image digest, the canonical mount list, the ports, the privileges, the
+devices, and the network mode. A life-step approval stores the action
+class (send, pay, delete, or publish), the target, and a digest of the
+payload the owner was shown. Either record expires after a short window
+and can be exchanged once. Any change to those fields voids the record.
 
 Exchanging an approval is one transaction: the record moves from `approved`
 to `exchanged`, and an operation journal row is inserted with a new
@@ -87,12 +107,14 @@ never creates a second container for a step that already succeeded.
 
 ## Network segmentation
 
-Two Compose networks separate the trusted core from anything optional:
+Three Compose networks separate the trusted core, guest apps, and the
+browser session:
 
 | Network | Carries |
 |---|---|
 | `core` | Friday, Board, Qdrant, Postgres, Ollama, memory-mcp, and the executor's control listener |
 | `apps` | Optional apps, the webhook receiver, and an integration gateway |
+| `browser` | The disposable browser session, with a route to the public internet and no route to `core` |
 
 The executor sits on both networks so it can health-check an app by its
 Compose DNS name and container port, and so an approved operation can
@@ -103,14 +125,17 @@ for that advisor. The diagram shows that split: Friday's request goes
 through the gateway, and the executor's health check goes to the app.
 An app container cannot open Postgres, Qdrant, or the executor's control
 port; that boundary is meant to be a test, not just a design intent, but
-no such test exists yet — there is no executor, gateway, or `apps` network
-in this repo today.
+no such test exists yet — there is no executor, gateway, `apps`
+network, or `browser` network in this repo today.
 
 An adopted app is called at an owner-supplied base URL. That address is
 resolved before any health call or tool call. It is refused when it
 points at Postgres, Qdrant, the memory service, the executor, the
 gateway's core listener, any other core service name, a link-local
-address, or a host metadata address.
+address, or a host metadata address. A mesh peer is held to the same
+line: it may open the Board and the authenticated MCP listener, and it
+may not open Postgres, Qdrant, or the executor's control port. Joining
+the mesh is not joining `core`.
 
 The webhook receiver is the only process an app may call, and only with
 the generated header. It stores a typed event. Friday announces that
@@ -142,10 +167,87 @@ does not write an approval.
 - The image architecture must match the host, and the declared memory must
   fit measured free RAM.
 
+## Task journal
+
+The operation journal and the task journal are one mechanism with two
+kinds of work.
+
+| Kind | Examples | Who may run a step |
+|---|---|---|
+| Machine | Install, uninstall, grant, backup, publish a port, publish a hostname | The executor, after one approval exchange |
+| Life | A goal the owner stated, research, a draft, a booking, a message | Friday, in the role the owner addressed, until a step is sensitive |
+
+A sensitive step is send, pay, delete, publish, or any machine change.
+That step waits. Drafting, recalling, and calling a tool the owner
+already granted do not wait for a new record. The journal row stores
+the owner, the role, the goal, the ordered steps, and a state of
+`ready`, `running`, `waiting`, `done`, or `blocked`. Recovery follows
+the operation-journal rule: check the step's postcondition, resume
+idempotently, never mint a second approval, never repeat a step that
+already succeeded.
+
+A task cannot widen its own grant. A new tool name discovered while the
+task is running stays off until the owner accepts it on the Board.
+
+## Doors
+
+| Door | Binds to | Approval |
+|---|---|---|
+| Board | `127.0.0.1:8080`, and the same page over the mesh after the owner joins a phone | Creates and exchanges approvals |
+| Messaging adapter | Friday's internal ask path | None. Turns in, "waiting" and "done" out |
+| Tunnel | The Board, behind a verified access check | The Board's password. The tunnel is not itself a login |
+
+The messaging adapter cannot call the executor, write an approval, or
+read Postgres. Mattermost and a token-based chat app are implementations
+of this adapter. Neither one is required for Friday to answer on the
+Board. No adapter is enabled at first boot.
+
+## Devices
+
+A mesh peer is a machine the owner pre-authorizes and means to keep: a
+phone, a laptop, this box. The peer may expose an MCP endpoint. That
+endpoint is a grant (address, secret reference, role, tool names), not
+a mount. Friday does not attach the peer's filesystem, a USB device,
+host networking, or the Docker socket.
+
+Ephemeral code machines register and are removed with the job. Cleanup
+of those names must not delete a permanent peer.
+
+## MCP
+
+Friday is an MCP client and an MCP server.
+
+Outbound, a grant names the server URL, the secret reference, the role,
+and the tool names. Tool definitions the grant does not list are not
+inserted into the model prompt. This holds when the server would
+otherwise advertise every tool it has.
+
+Inbound, the caller presents a per-harness token. Recall goes through
+the memory service: owner filter required, at most 8 notes. A mutating
+call is stored as a waiting approval and is not executed. The listener
+is on the authenticated front, not on the Docker network that holds
+Postgres. The caller does not receive the Qdrant key.
+
+A catalog wire is an outbound grant whose "tools" are the method and
+path in that wire. The acceptance rule is the same: a new name stays
+off until the owner accepts it.
+
+## Browser session
+
+The session is a disposable browser container on the `browser` network.
+It has no host mount, no host network, no host PID, no host IPC, and no
+Docker socket. Its only privileged hop is a credential broker that
+injects the vault entry for the site of that session. The model
+receives page text. It does not receive the secret.
+
+Send, pay, delete, and publish inside the session are sensitive steps.
+They wait for an approval record that names the action. The session is
+discarded when the task finishes or the owner stops it. A page fetched
+this way is evidence, under the same rule as a webhook body.
+
 ## What this repo is building toward
 
-See the repo README for the full Compose profile layout (`core`, `chat`,
-`code`, `edge`, `mesh`) and the build order this project follows before any
-release image is produced. This document — and the rest of `docs/` — will
-be filled in with implementation detail as each build-order step lands;
-right now most of it describes the target, not code that exists yet.
+See the repo README for the Compose profiles and the build order. The
+task journal, doors, mesh peers, MCP bus, and browser session are in
+that order after the gate, and ahead of catalog guests. This document
+describes the target. Those pieces are not in `compose.yml` yet.

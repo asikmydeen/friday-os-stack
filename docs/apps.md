@@ -1,6 +1,27 @@
-# App catalog
+# Grants and the app catalog
 
 **Status: draft, no install path is functional yet.**
+
+The product is the agent. Apps are guests. Friday reaches other agent
+harnesses, and the sites that have no harness, without installing a
+catalog app. This page is both of those attachments.
+
+## MCP grants
+
+An MCP server is the general way Friday attaches to a harness, including
+one running on a mesh peer. A grant stores the server URL, a
+`secret_ref`, the role that may call it, and the tool names that role
+may see. Tools the grant does not name are not put in the prompt.
+
+Friday also exposes an MCP server. A caller presents a per-harness
+token. Recall uses the owner filter and the cap of 8 notes in
+`docs/memory.md`. A call that would send, pay, delete, publish, or
+change the machine is stored as a waiting approval and does not run.
+The caller does not get the Qdrant key, and the listener is not on the
+Docker network that holds Postgres.
+
+A new tool name, from a server or from a catalog upgrade, stays off
+until the owner accepts it on the Board.
 
 ## Where apps come from
 
@@ -11,11 +32,14 @@ of the TrueNAS middleware or web UI, and the upstream tree is never copied
 into this repo's git history. Seeing a name on the Discover page is not
 permission to install it.
 
-The pinned catalog is a menu. An id installs only when it has a wire, has
+The pinned catalog is a menu of guests, not the front of the product.
+An id installs only when it has a wire, has
 passed a render test, and the owner approves that exact manifest. A
+wire is an outbound grant whose tools are the method and path it names. A
 template that needs host networking, host PID, host IPC, or a device or
 capability the reviewed manifest does not list is refused and stays
-listed. The first candidates are one media player and Home Assistant.
+listed. After the agent path exists, the first guests are one
+media player and Home Assistant.
 The Board shows measured free RAM before either approval is offered, and
 refuses the install when the declared memory does not fit.
 

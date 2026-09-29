@@ -65,7 +65,9 @@ collections.
 
 The memory service returns at most 8 notes, each already trimmed to a
 few hundred words. Friday sends the question and that pack to the chat
-provider. The provider does not receive the database. Tool results and
+provider. The provider does not receive the database. An MCP caller of
+Friday is not a bypass: the same owner filter and the same cap apply,
+and the caller does not receive the Qdrant key. Tool results and
 fetched pages can be saved as notes through `memory_save`. They are not
 appended to the pack as instructions. A one-character edit is a new live
 row, because the identity includes `md5(content)`. The pack cap is what

@@ -3,6 +3,9 @@
 **Status: draft. Most of the pipeline below (steps 5+ of the build order in
 `README.md`) is not implemented yet — this is what running against this
 repo today actually looks like, plus what changes once each step lands.**
+The product those steps are building is the local agent in
+`docs/system.md`: a computer in the house, doors, devices, MCP, and a
+browser session, with the catalog as a guest.
 
 ## Prerequisites
 

@@ -5,13 +5,25 @@ ship it yet.** There is no USB image and no installer. The picture below
 is the target. The last section says what the files in this repo implement
 today.
 
-Friday OS is a small always-on computer. One assistant, Friday, talks to
-the owner. A few specialist roles (the Cabinet) share that same voice.
+Friday is a local do-it-all agent. The hosted products in this category
+are Meta Muse and Grok Bot: the agent lives on a computer, keeps working
+after the chat closes, uses the services the person has connected, and
+stops for a person before mail, money, or a machine change goes out.
+Those products keep that computer in the vendor's cloud. Friday keeps it
+in the house.
+
+One assistant, Friday, talks to the owner. A few specialist roles (the
+Cabinet) share that same voice and can carry a task, not only a turn.
 The first release has one owner. Memory stays on the machine. A turn
 still sends a short pack of recalled notes to the chat provider the
-owner configured. Extra apps, such as a media player or Home Assistant,
-are installed only after an explicit approval, and they cannot read
-that memory.
+owner configured. The provider is a plug. Friday is not a model.
+
+The owner reaches Friday from a phone and from one messaging app, and
+from the Board on the machine. Other AI harnesses connect over MCP, in
+both directions, and only for tools the owner has accepted. A site with
+no MCP is used through a browser session on this computer. A media
+player or Home Assistant can be installed later, only after an explicit
+approval, and those apps cannot read the memory. They are guests.
 
 ## Why it is split this way
 
@@ -26,9 +38,13 @@ an outage. The split below is the remedy.
 | Answers that remember | Postgres holds the note. Qdrant holds the vector used to find it later. Both carry the same id, and both carry an owner. A turn sends at most 8 of those notes to the chat provider. That pack is the part that leaves the machine. |
 | What the model is shown stays evidence | Tool results and fetched pages can be saved as notes. A webhook is stored as a typed event and announced with a fixed sentence. The raw body is not pasted into the prompt as instructions. |
 | Notes that do not leak between people or roles | A person and a role never share a namespace. A search without an owner filter is refused, including `knowledge` and findings, and including while there is only one owner. A second person, and any shared household pool, wait until isolation checks exist. |
-| The model cannot install software by saying so | An install, a grant change, or a backup is a named operation. The owner approves that exact record on the Board. Chat cannot create or exchange the record. A model argument such as `confirmed=true` is ignored. |
+| The model cannot install software by saying so | An install, a grant change, a backup, a send, a payment, a delete, or a publication is a named operation. The owner approves that exact record on the Board. Chat cannot create or exchange the record. A model argument such as `confirmed=true` is ignored. |
+| A goal outlives the chat | The task journal holds the goal, the steps, and whether Friday is waiting on the owner. Closing the phone does not drop the task. Friday resumes the same journal after a crash and does not mint a second approval. |
+| Reach it from anywhere | The phone opens the Board over the private mesh, so ask and approve both work away from the machine. A messaging app delivers turns and status, and it cannot approve. A public tunnel is optional, off by default, and can only reach the Board. |
+| Other harnesses, and the rest of the web | MCP is the bus. Friday calls a granted server, and a granted harness can call Friday. Tools the owner has not accepted are not shown to the model. A site with no MCP is opened in a browser session on this computer. The session is not a shell on the host. |
+| Your devices stay peers | The phone, the laptop, and the box join the mesh as machines the owner meant to keep. A peer may expose an MCP endpoint. Friday does not mount that peer's disks, a USB device, or the Docker socket. |
 | Optional apps stay guests | Apps sit on their own network. Friday is not on that network. An advisor reaches an app only through a gateway that allows the method and path named in that app's wire file. An app cannot open Postgres, Qdrant, or the executor's control port. An adopted app's address is refused when it resolves to any of those. |
-| The machine is not on the internet by default | The Board is the only page on the host, at `127.0.0.1:8080`. Friday has no host port. A Cloudflare tunnel or a Headscale mesh is a later, separate decision. Memory, Postgres, and the download apps are never given a public name. After qBittorrent is installed, its swarm traffic still reaches the public internet. Only its settings page stays on localhost. |
+| The machine is not on the internet by default | The Board is the only page on the host, at `127.0.0.1:8080`. Friday has no host port. No door is on until the owner turns it on. Memory, Postgres, and the download apps are never given a public name. After qBittorrent is installed, its swarm traffic still reaches the public internet. Only its settings page stays on localhost. |
 | Chat works before anything else depends on it | The appliance does not ship a chat-sized model. The owner points it at an OpenAI-compatible base URL (a hosted provider, or a server they already run) and names a fast model and, if they want, a separate think model. Setup does not continue until that endpoint returns a real reply. Memory embeddings are separate and local: `nomic-embed-text`, 768 dimensions. |
 
 ## The systems
@@ -52,43 +68,63 @@ flowchart TB
     end
 
     exec[Executor]
+    tasks[Task journal]
     gw[App gateway]
+    mcp[MCP, both directions]
+    browser[Browser session]
 
-    subgraph optional [Optional and off until approved]
+    subgraph doors [Doors, off until the owner turns one on]
+      phone[Phone on the mesh]
+      chatapp[Messaging app]
+    end
+
+    subgraph peers [Devices on the mesh]
+      laptop[Laptop and other peers]
+    end
+
+    subgraph optional [Optional guests, off until approved]
       media[Media apps]
       homeapp[Home Assistant]
     end
 
-    subgraph remote [Remote access off by default]
-      tunnel[Cloudflare tunnel]
-      meshnet[Headscale mesh]
+    subgraph remote [Public path, off by default]
+      tunnel[Cloudflare tunnel to the Board only]
     end
   end
 
   owner --> board
+  phone --> board
+  chatapp --> friday
   board --> friday
   friday --> cabinet
   friday --> soul
   friday --> provider
   friday --> memsvc
+  friday --> tasks
   memsvc --> pg
   memsvc --> qdrant
   embed --> qdrant
   board --> exec
+  tasks --> exec
   exec --> media
   exec --> homeapp
   friday --> gw
   gw --> media
   gw --> homeapp
+  friday --> mcp
+  mcp --> laptop
+  mcp --> homeapp
+  friday --> browser
   tunnel --> board
-  meshnet --> board
 ```
 
 Postgres is the authority for a memory. Qdrant is the search index for
 that same id. The embed model only turns text into a vector. Friday does
 not hold the Qdrant key. Search and writes go through the memory service,
-which applies the owner filter. The owner's browser talks only to the
-Board. The Board calls Friday on the internal network.
+which applies the owner filter. The owner talks to the Board, on the
+machine or from a phone that has joined the mesh. A messaging app talks
+to Friday and cannot open the approval path. The Board calls Friday on
+the internal network.
 
 The chat provider is outside the appliance. Friday calls it with the
 question and the recall pack. It never receives the database, the disk,
@@ -97,7 +133,9 @@ or a shell.
 The executor is the only process that creates or changes containers. It
 reaches an app directly so it can health-check it and so an approved
 operation can run. Friday's later questions ("is the movie downloaded?")
-go through the gateway, not through that control path.
+go through the gateway, not through that control path. A question for
+another harness goes through MCP. A site with no MCP is opened in the
+browser session. Neither path can skip the approval record.
 
 ## What a question does
 
@@ -170,6 +208,97 @@ EFI partition, two 16 GB system slots, and a data partition that fills
 the rest, with at least 16 GB free after install so the backup fits. A
 movie library does not fit in that remainder.
 
+## What a task does
+
+A task is a goal that continues after the reply. "Book Tuesday and tell
+me when it needs a card" is a task. "Install Jellyfin" is a machine
+change, and it uses the same journal shape. The journal stores the
+owner, the role, the goal, the ordered steps, and the state: ready,
+running, waiting, done, or blocked.
+
+```mermaid
+sequenceDiagram
+  actor Owner
+  participant Door as Phone or chat app
+  participant Friday
+  participant Journal as Task journal
+  participant Board
+  participant Executor
+
+  Owner->>Door: A goal
+  Door->>Friday: The goal, no approval attached
+  Friday->>Journal: Record the goal and the steps
+  Friday->>Door: Working
+  Journal->>Friday: This step sends, pays, deletes, publishes, or changes the machine
+  Friday->>Door: Waiting. I cannot approve this
+  Owner->>Board: Approve that exact step
+  Board->>Executor: Exchange the approval once
+  Executor-->>Journal: Step finished
+  Friday->>Door: Done, or the next waiting point
+```
+
+Drafting, recalling, and reading a tool the owner already granted do not
+need a new approval. Sending, paying, deleting, publishing, installing,
+changing a grant, and backing up do. The chat process, the messaging
+door, and an outside harness cannot create or exchange that record. A
+crash resumes the same journal. It does not start a second copy of a
+step that already succeeded.
+
+Friday reports waiting and finished tasks on the door the owner used.
+The raw page, webhook, or tool body is still evidence. It is not written
+into the journal as instructions.
+
+## Doors and devices
+
+| Door | What it can do | What it cannot do |
+|---|---|---|
+| Board on the machine, `127.0.0.1:8080` | Ask, see health, accept a grant, approve | It is the only approval screen |
+| Phone on the mesh | Open that same Board | Skip the Board password. Join the core network |
+| Messaging app | Deliver a turn, and carry "waiting" or "done" back | Create or exchange an approval. Read Postgres |
+| Public tunnel | Reach the Board, only after a verified access check, and only if the owner turns it on | Reach Friday's container, memory, Postgres, or Qdrant |
+
+The mesh is how the phone, the laptop, and the box are one private
+network. Each long-lived machine is a peer the owner pre-authorizes. A
+peer may expose an MCP endpoint, and that endpoint is a grant like any
+other. Friday does not mount the peer's disk. An ephemeral code machine
+is not one of these peers, and removing it must not remove the phone or
+the laptop.
+
+No door is on at first boot. The setup screen is the local keyboard and
+monitor. Reach-from-anywhere is turned on afterward, one door at a time.
+
+## MCP
+
+MCP is how Friday talks to other agent harnesses, and how those
+harnesses talk to Friday. A catalog wire is the same idea for an app
+that is not an MCP server: a named method and path, for one role, off
+until accepted.
+
+| Direction | Rule |
+|---|---|
+| Friday calls out | The server URL, the secret reference, the role, and the tool names are a grant. Tools the grant does not name are not put in the model prompt, even if the server offers them. |
+| A harness calls Friday | It presents its own token. Recall uses the same owner filter and the same cap of 8 notes. A call that would send, pay, delete, publish, or change the machine becomes a waiting approval. It does not run. |
+| Memory | The caller does not receive the Qdrant key, the database, or a shell. |
+
+A laptop on the mesh reaches Friday's MCP listener. It does not join
+the Docker network that holds Postgres. The listener is authenticated.
+An accepted tool that later appears under a new name stays off until
+the owner accepts the new name. A catalog upgrade follows the same rule.
+
+## Browser session
+
+Most sites have no MCP server and no API. The browser session is how
+Friday uses them. It is a disposable browser on this computer, with no
+host mount, no host network, and no Docker socket. It is not on the
+core network, so a page cannot open Postgres, Qdrant, the memory
+service, or the executor.
+
+Credentials for a site stay in the vault. The session receives them
+from a broker for that site. The model sees the page as evidence. It
+does not see the password or the card. Sending, paying, deleting, and
+publishing from the session are waiting steps. They use the same
+approval record as an install. Reading and drafting do not.
+
 ## First boot
 
 The first release is one owner, at the machine, with a monitor and a
@@ -189,8 +318,9 @@ complete, the launcher deletes the token and the setup path is gone.
 Every other path on port 8080 already requires the Board password.
 
 Embeddings are checked separately, against the local model, and must be
-768 dimensions. Apps, a second person, a tunnel, and a mesh are not
-questions on this screen.
+768 dimensions. A messaging door, the mesh, MCP grants, the browser
+session, apps, a second person, and a tunnel are not questions on this
+screen.
 
 If the Board password is lost after setup, the owner opens a recovery
 prompt from the local keyboard. That prompt is not reachable over the
@@ -201,45 +331,57 @@ secrets in place. The exact sequence is in [secrets.md](secrets.md).
 
 | Capability | Systems involved | Why it is a separate piece |
 |---|---|---|
-| Talk, and switch to a specialist for one turn | Friday, Cabinet charters, soul file | The role is a job description, not an account and not a second memory. |
-| Remember and find a note | Memory service, Postgres, Qdrant, embed model | The text and the vector can be updated and deleted together. Search without an owner is refused. The provider receives at most 8 notes. |
-| See what is installed, healthy, or waiting for a decision | Board | The Board is the only host page. Discovery and approval stay on a screen the model cannot click for you. |
-| Install a media player or Home Assistant | Board, executor, allowlisted wire, app storage disk | Discover can list the pinned catalog. An id installs only after a render test and an approval. Templates that need host networking, a device, or an extra capability stay listed and refused. The media library is a separate disk. |
-| Reach the Board from another device | Cloudflare tunnel or Headscale, added later | A tunnel is a path to the Board, not a login. It stays off until the owner turns it on. |
+| Talk, and hand a goal to a role | Friday, Cabinet charters, task journal, soul file | The role is a job description, not an account and not a second memory. The journal is what keeps the goal after the turn ends. |
+| Remember and find a note | Memory service, Postgres, Qdrant, embed model | The text and the vector can be updated and deleted together. Search without an owner is refused. The provider receives at most 8 notes. An MCP caller gets the same filter and the same cap. |
+| Approve a send, a payment, a delete, a publication, or a machine change | Board, task journal, executor | The Board is the only approval screen. The phone can open it over the mesh. Chat cannot. |
+| Use another AI harness | MCP grants | Both directions. Unaccepted tools stay off. |
+| Use a site that has no harness | Browser session, vault | The session is disposable and off the core network. The model does not see the credential. |
+| See what is installed, healthy, or waiting | Board | Discovery and approval stay on a screen the model cannot click for you. |
+| Install a media player or Home Assistant | Board, executor, allowlisted wire, app storage disk | Optional guests. Discover can list the pinned catalog. An id installs only after a render test and an approval. The media library is a separate disk. |
+| Reach the Board from a network you do not control | Cloudflare tunnel, off by default | A tunnel is a path to the Board, not a login, and not the way devices join. The mesh is that way. |
 | Choose the chat model | Owner-set base URL, API key, fast model, optional think model | The rest of the appliance assumes chat works. Setup checks that with a real reply before continuing. |
 
 Starter roles on the first image are chief, cto, cfo, coach, home, and
-media. A larger set ships inactive under `charters/full/` and is enabled
-by copying one file into `charters/`. The home and media roles do nothing
-useful until the matching app is installed and its tools are granted.
-The family role does nothing until a second person exists and a shared
-collection has been created on purpose.
+media. A role can carry a task under its own owner id. A larger set
+ships inactive under `charters/full/` and is enabled by copying one file
+into `charters/`. The home and media roles do nothing useful until the
+matching app is installed and its tools are granted. The family role
+does nothing until a second person exists and a shared collection has
+been created on purpose.
 
 ## How it is implemented
 
 Compose profiles are the packaging. `core` is always on: Qdrant, the
 embed model, Postgres, the memory service. `chat` adds Friday and the
-Board. `code`, `edge`, and `mesh` are the later optional profiles
-(task runner, tunnel, mesh) and are empty in this repository.
+Board. `code`, `edge`, and `mesh` are later profiles (task runner,
+tunnel, mesh) and are empty in this repository. The task journal, the
+messaging door, the MCP listener, and the browser session are part of
+the product and have no profile in the file yet.
 
-Catalog apps are not written here. A pin records the upstream commit of
-the Compose catalog they render from. That pin is a menu. A wire file
-next to it tells Friday how to attach: storage on the app disk, a
-loopback port, a health URL, the advisor who receives the tools, and
-the secret names. An id installs only when it is on the allowlist and a
-render test has passed. The media bundle installs either Jellyfin or
-Plex, plus the download tools, against one shared library on the app
-disk. Home Assistant is a separate entry. The Board shows measured free
-RAM before either approval is offered, and the install is refused when
-the declared memory does not fit.
+Catalog apps are not written here, and they are not required for the
+agent to be useful. A pin records the upstream commit of the Compose
+catalog they render from. That pin is a menu of guests. A wire file is
+one kind of grant: storage on the app disk, a loopback port, a health
+URL, the advisor who receives the tools, and the secret names. An MCP
+server the owner adds is the other kind of grant. An id installs only
+when it is on the allowlist and a render test has passed. The media
+bundle installs either Jellyfin or Plex, plus the download tools,
+against one shared library on the app disk. Home Assistant is a
+separate entry. The Board shows measured free RAM before either
+approval is offered, and the install is refused when the declared
+memory does not fit.
 
-Two Docker networks keep the core away from guests. `core` carries
-Friday, the Board, Qdrant, Postgres, the embed model, the memory
-service, and the executor's control port. `apps` carries optional apps,
-a webhook receiver, and the gateway. The executor is the component that
-sits on both, because it has to health-check an app by its Compose DNS
-name. The receiver stores a typed event and does not call the executor.
-Friday has no published host port. Compose publishes only the Board, at
+Three Docker networks keep the pieces apart in the target. Only `core`
+exists in `compose.yml` today. `core` carries Friday, the Board,
+Qdrant, Postgres, the embed model, the memory service, and the
+executor's control port. `apps` carries optional apps, a webhook
+receiver, and the gateway. The browser session sits on its own network,
+with a path to the public internet and no path to `core`. The executor
+sits on `core` and `apps`, because it has to health-check an app by its
+Compose DNS name. The receiver stores a typed event and does not call
+the executor. A mesh peer reaches the Board and the MCP listener
+through an authenticated front. It does not join `core`. Friday has no
+published host port. Compose publishes only the Board, at
 `127.0.0.1:8080`.
 
 ## What this repository contains today
@@ -251,17 +393,20 @@ Friday has no published host port. Compose publishes only the Board, at
 | Memory rules and `sql/memories.sql` | Written. The script that creates collections exits immediately. Nothing calls `memory_save` yet. |
 | Compose file | Qdrant, Ollama, and Postgres are real images. Friday, the Board, and the memory service are named images and are not in a registry. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. `docker compose up` does not produce a working appliance. |
 | App wires | Drafts only. The catalog pin is empty. No renderer or executor reads them. |
-| Executor, gateway, `apps` network, approvals | Described. Not in the Compose file. |
-| Cloudflare and Headscale | Described, default off. No services in Compose. |
+| Executor, gateway, `apps` network, approvals, task journal | Described. Not in the Compose file. |
+| Messaging door, mesh peers, MCP bus, browser session | Described. Not in the Compose file. Off until the owner turns each one on. |
+| Cloudflare tunnel | Described, default off, Board only. No service in Compose. |
 | USB image and installer | Not started. |
 
 Build order, and where we are:
 
 1. Memory schema, env defaults, and collection rules in this repo.
-2. Mattermost as an optional door.
+2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot. **We are here.**
-5. Executor, recovery, appliance checks, and the USB image.
-6. Catalog rendering for the first allowlisted apps.
-7. Task runner, tunnel, and mesh profiles.
-8. A Helm chart, after Compose is proven.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. Catalog install stays refused.
+6. Doors and devices. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve.
+7. MCP, both directions, allowlist by default.
+8. The browser session, behind the same gate.
+9. Optional catalog guests, including a media library and Home Assistant.
+10. Signed updates the owner can see. Helm only for an existing Kubernetes cluster.

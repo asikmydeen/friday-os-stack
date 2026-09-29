@@ -20,6 +20,11 @@ real infrastructure hostnames.
   person and a role never share a namespace, so "same memory system" does
   not mean "one shared pool." Installing an app never creates a new
   "person" to talk to — the relevant advisor just gains that app's tools.
+- A role can also carry a task on the task journal (`docs/system.md`).
+  The task runs as Friday wearing that charter, under that role's owner
+  id. It does not gain a tool because the goal mentioned one. Send, pay,
+  delete, publish, and any machine change still wait for an approval the
+  role cannot create.
 
 ## Starter set (`charters/`)
 

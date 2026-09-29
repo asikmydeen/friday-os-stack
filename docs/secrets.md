@@ -55,6 +55,20 @@ prompt on the text console. The owner opens it from the local keyboard.
 It is not reachable over the network. It shows the new password once and
 leaves memory and the other secrets in place.
 
+## Door, MCP, and browser secrets
+
+These are minted or pasted when that piece is turned on. They are not
+questions on the first-boot screen. Each is stored in the secrets
+volume and referenced by name.
+
+| Secret | Used by |
+|---|---|
+| Messaging-door token | The adapter that delivers turns to Friday. The adapter cannot approve |
+| Mesh pre-auth key | One long-lived peer (phone, laptop). Not reused for an ephemeral code machine |
+| Inbound MCP token | One outside harness calling Friday. Recall stays owner-filtered |
+| Outbound MCP `secret_ref` | Friday calling a granted server. The model receives tool results, not this value |
+| Site credential | The browser session's broker, for that site only. The model does not receive the password or the card |
+
 ## Connections and app secrets
 
 - Integrations (external APIs, app credentials) store a reference to a

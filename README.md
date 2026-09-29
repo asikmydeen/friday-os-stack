@@ -2,9 +2,13 @@
 
 **Status: experimental scaffolding. No release image exists yet. Do not run `bootstrap.sh` expecting a working appliance.**
 
-This is the open-source Friday appliance: a small always-on box that runs a chat assistant (Friday), a set of advisors (the Cabinet), a Board dashboard, and durable memory, with an optional catalog of self-hosted apps (media servers, home automation, etc.) layered on top.
+Friday is a local do-it-all agent. One always-on computer in the house runs it. You reach it from your phone and from a chat app, and from the Board on the machine. It remembers on that computer. It calls the other AI harnesses you run, and they can call it, through MCP, with each tool granted by you. A site with no MCP is used through a browser session on the same computer. Work continues after you close the chat, and Friday comes back when it needs a decision. It cannot send, pay, delete, publish, or change the machine until you approve that exact action.
 
-The docs in this repository are the plan. Nothing here points at a running server.
+Meta Muse and Grok Bot are the hosted products in this category. Each gives the agent a computer, keeps working after the chat closes, and asks before mail, money, or a machine change goes out. Those computers sit in the vendor's cloud. This one sits in the house. The chat model is a plug: any OpenAI-compatible endpoint. Friday is the computer, the memory, and the gate.
+
+A media library, Home Assistant, and the rest of the app catalog can be added later. They are guests. They are not the front of the product.
+
+The docs in this repository are the plan. Nothing here points at a running server. The phone door, the mesh, the MCP bus, the task journal, and the browser session are part of that plan and are not built yet.
 
 For the picture of the systems, what each one is for, and what this
 repository implements today, see [docs/system.md](docs/system.md).
@@ -13,8 +17,9 @@ repository implements today, see [docs/system.md](docs/system.md).
 
 - Not a bootable USB image.
 - Not a tested installer.
-- Not a single disk for both memory and media. Media lives on a separate disk, named when that bundle is approved.
-- The Board is the only host page (`127.0.0.1:8080`). Friday has no host port.
+- Not a hosted agent account, and not a chat window in front of someone else's computer.
+- Not a media-box distribution. A library can be added later, on its own disk.
+- The Board is the only host page (`127.0.0.1:8080`). Friday has no host port. Nothing else is reachable until the owner turns a door on.
 - No hostnames, secrets, or household facts are included.
 - Not ready for anyone to self-host from.
 
@@ -43,27 +48,31 @@ friday-os-stack/
     secrets.md
     cloudflare.md
     headscale.md
-    apps.md                catalog, bundles, adopt-existing, uninstall
+    apps.md                grants, MCP, catalog, bundles, adopt-existing
   catalog/
     PIN                    commit of github.com/truenas/apps we render
     wires/                 our understanding of an upstream app id
   deploy/
     swarm/stack.yml        same services, for people already on Swarm
-    helm/                  after Compose is proven
+    helm/                  only for an existing Kubernetes cluster
 ```
 
 ## Core pieces (planned)
 
 | Piece | Role |
 |---|---|
-| Friday | Chat and Cabinet turns. No host port. Reaches memory only through the memory service |
-| Board | The only host page, at `127.0.0.1:8080`: discover, health, grants, and the ask box |
+| Friday | The only voice. Chat, Cabinet roles, and tasks. No host port. Reaches memory only through the memory service |
+| Board | The only host page, at `127.0.0.1:8080`: ask, health, grants, and the screen where an approval is made. A phone on the mesh opens this same page |
+| Task journal | A goal that outlives the turn. Send, pay, delete, publish, and any machine change wait for an approval chat cannot create |
 | Qdrant | Semantic memory, cosine, 768 dimensions |
-| Ollama (`nomic-embed-text`) | Turns a sentence into a vector; chat itself does not run a local model |
+| Ollama (`nomic-embed-text`) | Turns a sentence into a vector. Chat itself does not run a local model |
 | memory-mcp + Postgres | Durable `memories` row, id shared with the Qdrant point |
-| App executor | Separate process from the chatbot; accepts a named, approved operation only |
+| App executor | Separate process from the chatbot. Accepts a named, approved operation only |
+| Doors | A messaging adapter delivers turns and cannot approve. The mesh makes the phone, the laptop, and the box peers |
+| MCP | Friday calls granted harnesses. Other harnesses call Friday. A new tool stays off until the owner accepts it |
+| Browser session | For sites with no MCP. Disposable, off the core network, credentials kept in the vault |
 
-Left out of core on purpose: Mattermost, Telegram, Plex, Jellyfin, Radarr, Home Assistant, Coder, Cloudflare, Headscale, and any chat-sized local language model. Those are optional apps installed after the core boots. An id from the catalog installs only after a render test and an approval. Templates that need host networking, a device, or an extra capability stay listed and refused.
+Off until the owner turns them on, and not in this repository yet: the messaging door, the mesh, the public tunnel, the MCP listener, and the browser session. Left out of the product's front on purpose: Mattermost as a required room, Plex, Jellyfin, Radarr, Home Assistant, Coder, and any chat-sized local language model. Those are optional. A catalog id installs only after a render test and an approval. Templates that need host networking, a device, or an extra capability stay listed and refused.
 
 ## Developing against this repo
 
@@ -83,9 +92,11 @@ This repo is being built up in stages before any release image is produced:
 2. Mattermost as an optional door.
 3. Starter Cabinet charters and an example soul, with no household facts.
 4. This experimental source snapshot — where we are now.
-5. Executor, recovery, and appliance checks (approval records, mount roots, webhook receiver, coordinated backup, USB image build + scan).
-6. First allowlisted app wires (media stack).
-7. Optional code/edge/mesh profiles (Taskrunner, tunnels, mesh networking).
-8. Helm chart for core, after Compose is proven.
+5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused.
+6. Doors and devices. The phone opens the Board over the private mesh. One messaging adapter delivers turns and cannot approve. A public tunnel stays off, and if it is enabled later it reaches the Board only.
+7. MCP, both directions, with the allowlist as the default. A catalog wire is one kind of grant.
+8. A browser session on the box for sites with no MCP, behind the same gate.
+9. Optional catalog guests (a media library, Home Assistant), after the agent path works.
+10. Signed updates the owner can see. A Helm chart is only for someone who already runs Kubernetes. It is not how this appliance reaches a phone.
 
 No step past 4 has landed yet.

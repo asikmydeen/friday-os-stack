@@ -72,6 +72,11 @@ services:
 
   # --- profile: mesh (optional) ---
   # Headscale. Off unless HEADSCALE_ENABLED=1.
+  # The phone and the laptop join as peers. They do not join this network.
+
+  # Not services in this file yet, and part of the product in docs/system.md:
+  # the task journal, a messaging door, the MCP listener, and the browser
+  # session. Catalog apps stay guests. None of those pieces exist here.
 
 networks:
   core:
