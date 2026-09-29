@@ -9,7 +9,7 @@ repository implements today, is [system.md](system.md).
 
 | Layer | Rule |
 |---|---|
-| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. Compose still has no executor container, and nothing calls `memory_save` yet. |
+| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. `webhooks/` and `sql/webhooks.sql` store an app event and keep its body out of the prompt. Compose still has no executor container and no webhooks container, and nothing calls `memory_save` yet. |
 | **Agent reach** | Part of the product, off until the owner turns each piece on. The messaging door, the mesh, MCP in both directions, and the browser session. None of these is a catalog app, and none of them can mint an approval. |
 | **Optional apps** | Guests, not the front of the product. A menu rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus Mattermost, Taskrunner, and a Cloudflare tunnel. An id installs only when it is on the allowlist, has a wire, and has passed a render test. Nothing in this layer starts until the owner approves that exact operation. |
 
@@ -71,13 +71,24 @@ after the agent path exists, are one media player and Home Assistant.
 | Piece | Role | Footprint |
 |---|---|---|
 | Friday | The only mouth. No host port. The Board calls it on the compose network. Reads memory through the memory service, plus core health and the app registry. | One process |
-| Board | The only host page, published at `127.0.0.1:8080`. Discover, health, grants, and the ask box. Login is the Board password. | One small process |
+| Board | The only host page, published at `127.0.0.1:8080`. This project ships that page. It is not Open WebUI, LibreChat, or another packaged chat product. Discover, health, grants, and the ask box. Login is the Board password. The OpenAI-compatible URL is the model, not this screen. | One small Node process |
 | Qdrant | Semantic memory, cosine similarity, 768 dimensions, vectors on disk | Small while collections are empty |
 | Ollama (`nomic-embed-text` only) | Turns a sentence into a vector. Chat itself never runs a local model. | The largest core piece on disk |
 | memory-mcp + Postgres | The durable `memories` row, id shared with the Qdrant point. Holds the Qdrant key and applies the owner filter. Friday does not. | One small database |
 | Soul volume + Friday SQLite | Character, charters, conversations, obligations | Files on disk |
 | App executor | A process separate from the chat process. Accepts a named operation only when an approval record matches it exactly — never a raw shell string or an arbitrary Compose file. | One small container, no model and no page fetcher |
 | Task journal | Goals that outlive a turn, and the machine operations above. Same crash rule: resume the journal, never mint a second approval. | Rows next to the operation journal |
+
+First boot is this Board, on a monitor attached to the machine. The page
+opens before a network link exists. The owner connects a cable or joins
+Wi-Fi, then creates the server: the page starts the core that shipped in
+the image, and this computer is that server. Nothing in the core is
+downloaded, and the Board stays at `127.0.0.1:8080`. After the model key
+returns a real reply and the embed check passes, Friday speaks first on
+that same page and asks what to set up. The character and the Cabinet
+roles are already in the image. The owner's notes start empty. A step
+that sends, pays, deletes, publishes, installs, or changes the machine
+waits for the owner on that page.
 
 ## The key boundary: chat never performs the action
 
@@ -142,10 +153,13 @@ may not open Postgres, Qdrant, or the executor's control port. Joining
 the mesh is not joining `core`.
 
 The webhook receiver is the only process an app may call, and only with
-the generated header. It stores a typed event. Friday announces that
-event with a fixed sentence. The raw body is kept for the log and is not
-placed in the model prompt. The receiver does not call the executor and
-does not write an approval.
+the header `Friday-Webhook`. `webhooks/receiver.py` and
+`sql/webhooks.sql` store one typed event and keep the raw body out of
+the prompt. Friday announces a grab, a failure, a health change, or any
+other event with one fixed sentence. The receiver does not call the
+executor and does not write an approval. Compose has no webhooks
+container and no `apps` network, so this repo cannot yet show an app
+failing to open `friday:8080`.
 
 ## Approval and mount safety rules
 

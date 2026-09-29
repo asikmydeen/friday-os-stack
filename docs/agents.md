@@ -72,7 +72,8 @@ then confirm" habit soul-file changes use.
 
 A tool result is data for the answer. The model may read it. It is not
 obeyed as instructions. A webhook is announced with a fixed sentence; the
-raw body is not the message the model sees (`docs/apps.md`). Anything
+raw body is not the message the model sees (`webhooks/receiver.py`,
+`docs/apps.md`). Anything
 worth keeping is saved through the memory service and can return later
 only inside the recall pack (`docs/memory.md`).
 

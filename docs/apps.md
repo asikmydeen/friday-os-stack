@@ -87,11 +87,35 @@ service name, a link-local address, or a host metadata address. See
 
 ## Events from apps
 
-Webhooks are delivered to the webhook receiver, not to Friday and not to
-the executor. The receiver checks the generated header and stores a typed
-event. Friday announces that event with a fixed sentence (a grab, a
-failure, a health change). The raw body is kept for the log and is not
-placed in the model prompt. The receiver does not write an approval.
+An app posts to the webhook receiver. Friday does not receive that post,
+and the executor does not either. `webhooks/receiver.py` compares the
+header `Friday-Webhook` with the secret generated for that one app,
+using `hmac.compare_digest`. Jellyfin posts `POST /media`. Radarr and
+Sonarr post `POST /arr`. A secret matches only the source allowed on
+that route. Two apps on the same route that share one secret are
+refused, and nothing is stored. Any method other than POST is refused.
+A body larger than 256 KiB is refused, and nothing is stored.
+
+A matching post stores one typed event in `sql/webhooks.sql`. The type
+comes from a fixed list of event names. A Servarr `Grab` is a grab. A
+health change is health. `DownloadFailed`, `GrabFailed`, and
+`ManualInteractionRequired` are failures. A Servarr import (`Download`)
+and any other body, including text that looks like instructions, are
+`other`. Friday may then say one of four sentences:
+
+- grab: "A download was grabbed."
+- failure: "A download failed."
+- health: "An app health state changed."
+- other: "An app sent an event."
+
+`speak()` returns the sentence for the stored type. It does not read
+the body. The raw body stays in the log. A retry of the same body from
+the same app returns the same row and is not announced again. The row
+has no approval id. The receiver does not call the executor and does
+not write an approval.
+
+Compose has no webhooks service and no `apps` network yet. The receiver
+is not bound to a host port. Port 8080 on the host is the Board.
 
 ## Shared library volume (media bundle)
 

@@ -31,22 +31,45 @@ There is no SSH. The launcher, not the page, creates a provisioning token
 in a file that only that local user can read. The browser sends it only
 to `http://127.0.0.1:8080/provision`.
 
-That path shows the minted Board password and accepts the display name,
-the timezone, and the chat endpoint. It cannot install an app, change a
-grant, or read memory. Every other path on port 8080 returns 401 without
-the Board password. Dashboard authentication is not turned off to make
-setup work.
+That path opens on the local screen before a network link exists. It
+shows the minted Board password. Every other path on port 8080 returns
+401 without the Board password. Dashboard authentication is not turned
+off to make setup work. The page cannot install a catalog app, change a
+grant, or read owner memory.
 
-The chat endpoint is an OpenAI-compatible base URL, an API key, a fast
-model, and an optional think model. Chat stays off until that endpoint
-returns a real, non-empty reply. The local embed check is separate and
-must return a 768-dimension vector from the pinned model.
+The page is the one this project ships. Open WebUI, LibreChat, and
+other packaged chat products are not part of setup. It walks through
+these steps:
 
-The owner confirms they have saved the Board password before setup is
-marked complete. The launcher then deletes the provisioning token and
-`/provision` returns 404. Until that confirmation, every boot returns to
-the same screen and shows the same password. A power loss after the
-secrets exist does not mint a second set.
+1. Connect a cable, or choose a Wi-Fi network and enter its password.
+   The page shows the link. A later boot reuses a saved link.
+2. Create the server. The owner confirms, and the page starts the core
+   that shipped in the image. This computer is the server. Those pieces
+   are not downloaded. The Board stays at `127.0.0.1:8080`.
+3. Display name, timezone, and the chat endpoint: an OpenAI-compatible
+   base URL, an API key, a fast model, and an optional think model.
+   That endpoint is the model. Setup names no vendor. Chat stays off
+   until that endpoint returns a real, non-empty reply. The local embed
+   check is separate and must return a 768-dimension vector from the
+   pinned model.
+4. The owner confirms they have saved the Board password. The launcher
+   then deletes the provisioning token and `/provision` returns 404.
+
+Until that confirmation, every boot returns to the same screen and
+shows the same password. A power loss after the secrets exist does not
+mint a second set.
+
+A Wi-Fi password taken on this screen is stored on the data partition.
+It is not one of the four secrets minted above, and the Board does not
+show it again.
+
+The image already carries Friday's character and the Cabinet roles.
+The owner's notes start empty. After the password is confirmed and the
+key has returned a real reply, the same page opens the conversation and
+Friday speaks first, asking what to set up. A goal that should outlive the turn goes into the task
+journal. Sending, paying, deleting, publishing, installing, and
+changing the machine wait on that page until the owner approves the
+exact step.
 
 ## Lost Board password
 
@@ -68,6 +91,14 @@ volume and referenced by name.
 | Inbound MCP token | One outside harness calling Friday. Recall stays owner-filtered |
 | Outbound MCP `secret_ref` | Friday calling a granted server. The model receives tool results, not this value |
 | Site credential | The browser session's broker, for that site only. The model does not receive the password or the card |
+
+## App webhook secret
+
+Registering an app's webhook generates a secret for that app alone. It
+is not one of the four secrets minted at first boot, and it is not
+`FRIDAY_NOTIFY_TOKEN`. The receiver compares the request header
+`Friday-Webhook` with `hmac.compare_digest`. The Board shows the name.
+It does not show the value.
 
 ## Connections and app secrets
 

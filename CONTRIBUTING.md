@@ -48,6 +48,7 @@ Fill in `.env`:
 | `scripts/bootstrap.sh` | Writes `.env` from the example, then exits with a message — does not run bootstrap-memory yet |
 | `scripts/bootstrap-memory.sh` | Starts Qdrant, Ollama, and Postgres, checks that `nomic-embed-text` is 768 dimensions, creates the six collections, and applies `sql/memories.sql`. Does not start Friday, the Board, or memory-mcp |
 | `gate/`, `sql/approvals.sql` | Approval rules and the task journal. Chat cannot create or exchange an approval. Catalog install is refused. `python3 -m unittest discover -s tests -t .` covers the rules. The executor container is not in Compose |
+| `webhooks/`, `sql/webhooks.sql` | An app post is classified and stored. The header `Friday-Webhook` must match that app. The announcement is one fixed sentence. The same unittest command covers `tests/test_webhooks.py`. Compose has no webhooks service |
 | `scripts/bootstrap-mattermost.py` | Placeholder; exits 1 immediately |
 | `charters/`, `soul/SOUL.example.md` | Real content, usable today as the source of truth for what a charter/soul file should look like |
 | `catalog/wires/*.yml` | Draft wire specs — not yet consumed by any renderer or executor |

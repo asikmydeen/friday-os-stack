@@ -6,6 +6,8 @@ Friday is a local do-it-all agent. One always-on computer in the house runs it. 
 
 Meta Muse and Grok Bot are the hosted products in this category. Each gives the agent a computer, keeps working after the chat closes, and asks before mail, money, or a machine change goes out. Those computers sit in the vendor's cloud. This one sits in the house. The chat model is a plug: any OpenAI-compatible endpoint. Friday is the computer, the memory, and the gate.
 
+On first boot the owner uses a monitor on that computer. The page connects a cable or Wi-Fi, creates the server on this computer, and takes the model key. Friday then asks, on the Board, what to set up. That page is not built yet.
+
 A media library, Home Assistant, and the rest of the app catalog can be added later. They are guests. They are not the front of the product.
 
 The docs in this repository are the plan. Nothing here points at a running server. The phone door, the mesh, the MCP bus, the task journal, and the browser session are part of that plan and are not built yet.
@@ -64,7 +66,7 @@ friday-os-stack/
 | Piece | Role |
 |---|---|
 | Friday | The only voice. Chat, Cabinet roles, and tasks. No host port. Reaches memory only through the memory service |
-| Board | The only host page, at `127.0.0.1:8080`: ask, health, grants, and the screen where an approval is made. A phone on the mesh opens this same page |
+| Board | The only host page, at `127.0.0.1:8080`. This project ships that page. It is not a packaged chat product. Ask, health, grants, and the screen where an approval is made. A phone on the mesh opens this same page. Friday has no page |
 | Task journal | A goal that outlives the turn. Send, pay, delete, publish, and any machine change wait for an approval chat cannot create |
 | Qdrant | Semantic memory, cosine, 768 dimensions |
 | Ollama (`nomic-embed-text`) | Turns a sentence into a vector. Chat itself does not run a local model |
@@ -94,11 +96,11 @@ This repo is being built up in stages before any release image is produced:
 2. Mattermost as an optional door.
 3. Starter Cabinet charters and an example soul, with no household facts.
 4. This experimental source snapshot.
-5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, and the mount checks are in this repo.
+5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, and the webhook rules are in this repo.
 6. Doors and devices. The phone opens the Board over the private mesh. One messaging adapter delivers turns and cannot approve. A public tunnel stays off, and if it is enabled later it reaches the Board only.
 7. MCP, both directions, with the allowlist as the default. A catalog wire is one kind of grant.
 8. A browser session on the box for sites with no MCP, behind the same gate.
 9. Optional catalog guests (a media library, Home Assistant), after the agent path works.
 10. Signed updates the owner can see. A Helm chart is only for someone who already runs Kubernetes. It is not how this appliance reaches a phone.
 
-The memory bootstrap and the approval gate's first cut are in this repo. The webhook receiver, the coordinated backup, and the USB image are still ahead, and so is every step after them.
+The memory bootstrap, the approval gate's first cut, and the webhook receiver's first cut are in this repo. The coordinated backup and the USB image are still ahead, and so is every step after them.

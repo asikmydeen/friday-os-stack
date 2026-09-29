@@ -34,7 +34,7 @@ an outage. The split below is the remedy.
 
 | Need | How it is met |
 |---|---|
-| One place to talk | Friday is the only voice. Advisors are roles of that process, switched for a turn (`@cto`, "ask my cfo"). Installing an app does not create another person to talk to. |
+| One place to talk | The Board is the page, and this project ships it. Friday is the only voice. Advisors are roles of that process, switched for a turn (`@cto`, "ask my cfo"). Installing an app does not create another person to talk to. |
 | Answers that remember | Postgres holds the note. Qdrant holds the vector used to find it later. Both carry the same id, and both carry an owner. A turn sends at most 8 of those notes to the chat provider. That pack is the part that leaves the machine. |
 | What the model is shown stays evidence | Tool results and fetched pages can be saved as notes. A webhook is stored as a typed event and announced with a fixed sentence. The raw body is not pasted into the prompt as instructions. |
 | Notes that do not leak between people or roles | A person and a role never share a namespace. A search without an owner filter is refused, including `knowledge` and findings, and including while there is only one owner. A second person, and any shared household pool, wait until isolation checks exist. |
@@ -45,7 +45,7 @@ an outage. The split below is the remedy.
 | Your devices stay peers | The phone, the laptop, and the box join the mesh as machines the owner meant to keep. A peer may expose an MCP endpoint. Friday does not mount that peer's disks, a USB device, or the Docker socket. |
 | Optional apps stay guests | Apps sit on their own network. Friday is not on that network. An advisor reaches an app only through a gateway that allows the method and path named in that app's wire file. An app cannot open Postgres, Qdrant, or the executor's control port. An adopted app's address is refused when it resolves to any of those. |
 | The machine is not on the internet by default | The Board is the only page on the host, at `127.0.0.1:8080`. Friday has no host port. No door is on until the owner turns it on. Memory, Postgres, and the download apps are never given a public name. After qBittorrent is installed, its swarm traffic still reaches the public internet. Only its settings page stays on localhost. |
-| Chat works before anything else depends on it | The appliance does not ship a chat-sized model. The owner points it at an OpenAI-compatible base URL (a hosted provider, or a server they already run) and names a fast model and, if they want, a separate think model. Setup does not continue until that endpoint returns a real reply. Memory embeddings are separate and local: `nomic-embed-text`, 768 dimensions. |
+| Chat works before anything else depends on it | The appliance does not ship a chat-sized model. The owner points it at an OpenAI-compatible base URL (a hosted provider, or a server they already run) and names a fast model and, if they want, a separate think model. That URL is the model. The screen stays the Board. Setup does not continue until that endpoint returns a real reply. Memory embeddings are separate and local: `nomic-embed-text`, 768 dimensions. |
 
 ## The systems
 
@@ -129,6 +129,23 @@ the internal network.
 The chat provider is outside the appliance. Friday calls it with the
 question and the recall pack. It never receives the database, the disk,
 or a shell.
+
+## The page you type into
+
+The page is the Board. This project ships that page: one small Node
+process at `127.0.0.1:8080`. It calls Friday at `http://friday:8080` on
+the Compose network. Friday has no page of its own.
+
+Open WebUI, LibreChat, and other packaged chat products are not this
+page. The OpenAI-compatible base URL is the model, not the screen.
+Setup names no vendor. The Board image in `compose.yml` is an
+unpublished placeholder, so the page is not running from this repo yet.
+A messaging app is a later door. It delivers turns and cannot approve.
+First boot's setup screen is the Board's `/provision` path. It connects
+a cable or Wi-Fi, creates the server on this computer, and takes the
+model key. When that key returns a real reply, the same page is the
+conversation, and Friday speaks first. The sequence is under
+[First boot](#first-boot).
 
 The executor is the only process that creates or changes containers. It
 reaches an app directly so it can health-check it and so an approved
@@ -252,7 +269,7 @@ into the journal as instructions.
 
 | Door | What it can do | What it cannot do |
 |---|---|---|
-| Board on the machine, `127.0.0.1:8080` | Ask, see health, accept a grant, approve | It is the only approval screen |
+| Board on the machine, `127.0.0.1:8080` | Ask, see health, accept a grant, approve. This is the page the project ships | It is the only approval screen |
 | Phone on the mesh | Open that same Board | Skip the Board password. Join the core network |
 | Messaging app | Deliver a turn, and carry "waiting" or "done" back | Create or exchange an approval. Read Postgres |
 | Public tunnel | Reach the Board, only after a verified access check, and only if the owner turns it on | Reach Friday's container, memory, Postgres, or Qdrant |
@@ -307,20 +324,44 @@ There is no SSH. The machine mints its id and its secrets before it asks
 anything, and stores them on the data partition.
 
 The browser can open the setup page only with a provisioning token the
-launcher created for that local user. The page shows the Board password
-and accepts a display name, a timezone, and one chat endpoint: an
-OpenAI-compatible base URL, an API key, a fast model, and an optional
-think model. Setup does not finish until that endpoint returns a real
-reply, and until the owner confirms they have saved the Board password.
-Until that confirmation, every boot returns to the same screen and the
-same password. A power loss does not mint a second set. When setup is
-complete, the launcher deletes the token and the setup path is gone.
-Every other path on port 8080 already requires the Board password.
+launcher created for that local user. The page opens on that screen
+before any network link exists. Every other path on port 8080 already
+requires the Board password.
 
-Embeddings are checked separately, against the local model, and must be
-768 dimensions. A messaging door, the mesh, MCP grants, the browser
+The page then walks through these steps. A power loss returns to the
+same step and the same Board password. It does not mint a second set.
+
+1. Connect this computer. Use the cable when a wired link is already up,
+   or choose a Wi-Fi network and enter its password. The page shows the
+   link. A later boot reuses a saved link. The Wi-Fi password stays on
+   the data partition and is not shown again.
+2. Create the server. The owner confirms, and the page starts the core
+   that shipped in the image: Friday, the Board, memory, and the embed
+   model. This computer is the server. Those pieces are not downloaded.
+   The Board stays at `127.0.0.1:8080`. No port is opened on the local
+   network, and no tunnel or mesh is started.
+3. Name, timezone, and the model key: an OpenAI-compatible base URL, an
+   API key, a fast model, and an optional think model. Setup names no
+   vendor. Chat stays off until that endpoint returns a real, non-empty
+   reply. The local embed check must return a 768-dimension vector from
+   the pinned model.
+4. The owner confirms they have saved the Board password. The launcher
+   then deletes the provisioning token and `/provision` returns 404.
+
+The image already carries Friday's character and the Cabinet roles, so
+the model knows its job before the owner explains it. The owner's notes
+start empty. The same Board then opens the conversation, and Friday
+speaks first: it asks what the owner wants set up, in ordinary language.
+A goal that should outlive the turn goes into the task journal. Sending,
+paying, deleting, publishing, installing, and changing the machine wait
+on that page until the owner approves the exact step. The model does not
+finish those steps on its own.
+
+The setup page cannot install a catalog app, change a grant, or read
+owner memory. A messaging door, the mesh, MCP grants, the browser
 session, apps, a second person, and a tunnel are not questions on this
-screen.
+screen. Friday can ask about them in the conversation afterward, one
+confirmed operation at a time.
 
 If the Board password is lost after setup, the owner opens a recovery
 prompt from the local keyboard. That prompt is not reachable over the
@@ -331,7 +372,7 @@ secrets in place. The exact sequence is in [secrets.md](secrets.md).
 
 | Capability | Systems involved | Why it is a separate piece |
 |---|---|---|
-| Talk, and hand a goal to a role | Friday, Cabinet charters, task journal, soul file | The role is a job description, not an account and not a second memory. The journal is what keeps the goal after the turn ends. |
+| Talk, and hand a goal to a role | Friday, Cabinet charters, task journal, soul file | The role is a job description, not an account and not a second memory. The journal is what keeps the goal after the turn ends. After the model key works, Friday speaks first on the Board and asks what to set up. |
 | Remember and find a note | Memory service, Postgres, Qdrant, embed model | The text and the vector can be updated and deleted together. Search without an owner is refused. The provider receives at most 8 notes. An MCP caller gets the same filter and the same cap. |
 | Approve a send, a payment, a delete, a publication, or a machine change | Board, task journal, executor | The Board is the only approval screen. The phone can open it over the mesh. Chat cannot. |
 | Use another AI harness | MCP grants | Both directions. Unaccepted tools stay off. |
@@ -378,8 +419,9 @@ executor's control port. `apps` carries optional apps, a webhook
 receiver, and the gateway. The browser session sits on its own network,
 with a path to the public internet and no path to `core`. The executor
 sits on `core` and `apps`, because it has to health-check an app by its
-Compose DNS name. The receiver stores a typed event and does not call
-the executor. A mesh peer reaches the Board and the MCP listener
+Compose DNS name. `webhooks/receiver.py` and `sql/webhooks.sql` store a
+typed event and do not call the executor. Compose has no webhooks
+service. A mesh peer reaches the Board and the MCP listener
 through an authenticated front. It does not join `core`. Friday has no
 published host port. Compose publishes only the Board, at
 `127.0.0.1:8080`.
@@ -394,6 +436,7 @@ published host port. Compose publishes only the Board, at
 | Compose file | Qdrant, Ollama, and Postgres are real images. Friday, the Board, and the memory service are named images and are not in a registry. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. `docker compose up` does not produce a working appliance. |
 | App wires | Drafts only. The catalog pin is empty. No renderer or executor reads them. |
 | Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
+| Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. `sql/webhooks.sql` stores one typed event. Friday may say one of four fixed sentences. The raw body stays in the log. Compose has no webhooks service and publishes no port for it. |
 | Executor container, gateway, `apps` network | Described. Not in the Compose file. The gate does not start a container. |
 | Messaging door, mesh peers, MCP bus, browser session | Described. Not in the Compose file. Off until the owner turns each one on. |
 | Cloudflare tunnel | Described, default off, Board only. No service in Compose. |
@@ -405,7 +448,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **We are here.** Catalog install stays refused. The approval record and the journal resume are in the tree. The webhook receiver, the coordinated backup, and the USB image are the rest of this step.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **We are here.** Catalog install stays refused. The approval record, the journal resume, and the webhook rules are in the tree. The coordinated backup and the USB image are the rest of this step.
 6. Doors and devices. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve.
 7. MCP, both directions, allowlist by default.
 8. The browser session, behind the same gate.
