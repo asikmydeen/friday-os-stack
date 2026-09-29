@@ -36,7 +36,7 @@ friday-os-stack/
   soul/SOUL.example.md     short character file the operator edits
   scripts/
     bootstrap.sh           writes .env from the example if missing, then exits
-    bootstrap-memory.sh    waits for Qdrant and Ollama, creates collections, checks 768 dims
+    bootstrap-memory.sh    starts Qdrant, Ollama, and Postgres; checks nomic-embed-text is 768 dims; creates collections; applies memories.sql
     bootstrap-mattermost.py optional Mattermost setup, not implemented yet
   sql/
     memories.sql           Postgres table memory_save writes to

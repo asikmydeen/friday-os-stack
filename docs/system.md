@@ -390,7 +390,7 @@ published host port. Compose publishes only the Board, at
 |---|---|
 | Product rules and this diagram | Written. Target, not a running system. |
 | Cabinet charters and an example soul | Written. Generic. No household facts. |
-| Memory rules and `sql/memories.sql` | Written. The script that creates collections exits immediately. Nothing calls `memory_save` yet. |
+| Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. Nothing calls `memory_save` yet. |
 | Compose file | Qdrant, Ollama, and Postgres are real images. Friday, the Board, and the memory service are named images and are not in a registry. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. `docker compose up` does not produce a working appliance. |
 | App wires | Drafts only. The catalog pin is empty. No renderer or executor reads them. |
 | Executor, gateway, `apps` network, approvals, task journal | Described. Not in the Compose file. |

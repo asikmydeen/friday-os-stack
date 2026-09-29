@@ -46,7 +46,7 @@ Fill in `.env`:
 |---|---|
 | `compose.yml` | Valid Compose file; `friday`, `board`, `memory-mcp` images are named but not published anywhere — `docker compose up` will fail to pull them |
 | `scripts/bootstrap.sh` | Writes `.env` from the example, then exits with a message — does not run bootstrap-memory yet |
-| `scripts/bootstrap-memory.sh` | Placeholder; exits 1 immediately |
+| `scripts/bootstrap-memory.sh` | Starts Qdrant, Ollama, and Postgres, checks that `nomic-embed-text` is 768 dimensions, creates the six collections, and applies `sql/memories.sql`. Does not start Friday, the Board, or memory-mcp |
 | `scripts/bootstrap-mattermost.py` | Placeholder; exits 1 immediately |
 | `charters/`, `soul/SOUL.example.md` | Real content, usable today as the source of truth for what a charter/soul file should look like |
 | `catalog/wires/*.yml` | Draft wire specs — not yet consumed by any renderer or executor |
@@ -73,9 +73,9 @@ exist in this repo yet, most contributions fall into one of these buckets:
    docker compose --profile core up qdrant ollama postgres
    ```
 
-   This is the closest thing to a working slice of this stack today —
-   useful for developing `bootstrap-memory.sh` or the memory schema against
-   real services.
+   `./scripts/bootstrap-memory.sh` is that same slice: it starts these three
+   services, checks the embed model, creates the collections, and applies
+   `sql/memories.sql`. Friday, the Board, and memory-mcp stay stopped.
 
 ## Secret hygiene before every push
 

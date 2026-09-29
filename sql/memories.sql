@@ -6,16 +6,16 @@
 -- block below. Column comments describe intent only and must not restate
 -- the constraint text, so the two never drift apart.
 --
--- This runs only against an empty Postgres data directory (Postgres skips
--- init scripts once `PGDATA` already has a cluster). A volume created from
--- an earlier draft of this file — `person_id`/`kind`, a btree on raw
--- `content`, or a queue without `done_at` — is not altered by re-applying
--- this script. Recreate that volume, or migrate it explicitly, before
--- relying on the functions below.
+-- Postgres init runs this only on an empty data directory. Once `PGDATA`
+-- already has a cluster, Postgres skips init scripts.
+-- `scripts/bootstrap-memory.sh` applies this file on every run.
+-- Re-applying it does not migrate an older volume (`person_id`/`kind`, a
+-- btree on raw `content`, or a queue without `done_at`). Recreate that
+-- volume, or migrate it explicitly, before relying on the functions below.
 --
 -- This schema is the contract memory_save writes in this repository.
--- The service that calls it is not implemented yet
--- (see README.md "Build order", step 1).
+-- The service that calls memory_save is not implemented yet
+-- (see README.md "Build order").
 
 CREATE TABLE IF NOT EXISTS memories (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

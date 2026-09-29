@@ -131,11 +131,12 @@ that has not finished. Soft delete is `memory_tombstone`.
 person working notes pass `'working'`. A `BEFORE UPDATE` trigger rejects
 any change to `owner_id` or `owner_kind`.
 
-This file is applied from Postgres init, which runs only on an empty data
-directory. An existing volume — an older `person_id`/`kind` layout, or an
-earlier draft of this file that indexed raw `content` or omitted `done_at` —
-is not migrated by applying the script again. Recreate `postgres_data`, or
-migrate that volume explicitly, before expecting these indexes and functions.
+Postgres init applies this file only on an empty data directory.
+`scripts/bootstrap-memory.sh` applies it again on every run. Re-applying it
+does not migrate an older volume — an older `person_id`/`kind` layout, or an
+earlier draft that indexed raw `content` or omitted `done_at`. Recreate
+`postgres_data`, or migrate that volume explicitly, before expecting these
+indexes and functions.
 
 ## Backup
 
@@ -148,19 +149,21 @@ taken inside that same pause, then writers resume. Optional-app data
 (Jellyfin's config, the movie files) is explicitly excluded from this
 manifest — restoring the core never rolls optional apps backward.
 
-## `scripts/bootstrap-memory.sh` (intended sequence, not yet implemented)
+## `scripts/bootstrap-memory.sh`
 
-1. Wait for Qdrant and Ollama to be healthy.
-2. Confirm the probe embedding has length 768; refuse to continue on a
-   mismatch, so a different embed model never silently mixes into the same
-   collection.
-3. Create the collections above if missing — an existing collection is left
-   alone so a second boot never wipes notes.
+`scripts/bootstrap-memory.sh` performs this sequence. The memory service
+that calls `memory_save` is not implemented yet.
+
+1. Wait until Qdrant (`/readyz`) and Ollama (`/api/tags`) answer.
+2. Confirm `nomic-embed-text` returns a vector of length 768 before any
+   collection is created. Another model is refused, including a different
+   model that also returns 768.
+3. Create the collections above if they are missing. An existing collection
+   is left in place, so a second run does not wipe notes. A collection whose
+   size is not 768, or whose distance is not cosine, is left in place and
+   the script stops.
 4. Create keyword payload indexes on `owner_id`, `owner_kind`, `topic`,
-   `source`.
+   and `source`.
 5. Apply `sql/memories.sql`.
 6. Write one smoke-test point, search it back above a score threshold,
    delete it, and only then exit 0.
-
-The service that performs these steps is not implemented yet. The sequence
-above is the contract it has to follow (see README "Build order", step 1).
