@@ -5,11 +5,11 @@
 The customer-facing picture of the same target, including what this
 repository implements today, is [system.md](system.md).
 
-## Two layers
+## Three layers
 
 | Layer | Rule |
 |---|---|
-| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. Nothing in this repo is wired to memory or the executor yet — this table describes the target, not the current state of the code. |
+| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. Compose still has no executor container, and nothing calls `memory_save` yet. |
 | **Agent reach** | Part of the product, off until the owner turns each piece on. The messaging door, the mesh, MCP in both directions, and the browser session. None of these is a catalog app, and none of them can mint an approval. |
 | **Optional apps** | Guests, not the front of the product. A menu rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus Mattermost, Taskrunner, and a Cloudflare tunnel. An id installs only when it is on the allowlist, has a wire, and has passed a render test. Nothing in this layer starts until the owner approves that exact operation. |
 
@@ -94,8 +94,10 @@ manifest version (catalog pin, template hash, rendered digest), the
 image digest, the canonical mount list, the ports, the privileges, the
 devices, and the network mode. A life-step approval stores the action
 class (send, pay, delete, or publish), the target, and a digest of the
-payload the owner was shown. Either record expires after a short window
+payload the owner was shown. Either record expires after ten minutes
 and can be exchanged once. Any change to those fields voids the record.
+`gate/` and `sql/approvals.sql` implement that record. They do not start
+a container.
 
 Exchanging an approval is one transaction: the record moves from `approved`
 to `exchanged`, and an operation journal row is inserted with a new
@@ -124,9 +126,11 @@ on both networks and allows only the method and path a wire file names
 for that advisor. The diagram shows that split: Friday's request goes
 through the gateway, and the executor's health check goes to the app.
 An app container cannot open Postgres, Qdrant, or the executor's control
-port; that boundary is meant to be a test, not just a design intent, but
-no such test exists yet — there is no executor, gateway, `apps`
-network, or `browser` network in this repo today.
+port; that boundary is meant to be a packet test between containers.
+The approval gate already refuses a host network and a mount that
+resolves outside the app disk, including through a symlink. There is
+still no executor container, gateway, `apps` network, or `browser`
+network in this repo, so that refusal is not yet a test between containers.
 
 An adopted app is called at an owner-supplied base URL. That address is
 resolved before any health call or tool call. It is refused when it

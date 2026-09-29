@@ -191,7 +191,7 @@ sequenceDiagram
 
 The approval names the operation, the app, the reviewed manifest, the
 image digest, the mounts, the ports, the privileges, and the network
-mode. It expires quickly and can be used once. Any change to those
+mode. It expires after ten minutes and can be used once. Any change to those
 fields voids it. App mounts have to fall under the app storage disk the
 owner names in that approval. That disk is a different device from the
 data partition. The data partition holds the machine id, secrets,
@@ -393,7 +393,8 @@ published host port. Compose publishes only the Board, at
 | Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. Nothing calls `memory_save` yet. |
 | Compose file | Qdrant, Ollama, and Postgres are real images. Friday, the Board, and the memory service are named images and are not in a registry. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. `docker compose up` does not produce a working appliance. |
 | App wires | Drafts only. The catalog pin is empty. No renderer or executor reads them. |
-| Executor, gateway, `apps` network, approvals, task journal | Described. Not in the Compose file. |
+| Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
+| Executor container, gateway, `apps` network | Described. Not in the Compose file. The gate does not start a container. |
 | Messaging door, mesh peers, MCP bus, browser session | Described. Not in the Compose file. Off until the owner turns each one on. |
 | Cloudflare tunnel | Described, default off, Board only. No service in Compose. |
 | USB image and installer | Not started. |
@@ -403,8 +404,8 @@ Build order, and where we are:
 1. Memory schema, env defaults, and collection rules in this repo.
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
-4. This source snapshot. **We are here.**
-5. The gate and the task journal, recovery, appliance checks, and the USB image. Catalog install stays refused.
+4. This source snapshot.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **We are here.** Catalog install stays refused. The approval record and the journal resume are in the tree. The webhook receiver, the coordinated backup, and the USB image are the rest of this step.
 6. Doors and devices. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve.
 7. MCP, both directions, allowlist by default.
 8. The browser session, behind the same gate.

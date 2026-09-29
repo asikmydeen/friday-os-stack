@@ -38,8 +38,10 @@ friday-os-stack/
     bootstrap.sh           writes .env from the example if missing, then exits
     bootstrap-memory.sh    starts Qdrant, Ollama, and Postgres; checks nomic-embed-text is 768 dims; creates collections; applies memories.sql
     bootstrap-mattermost.py optional Mattermost setup, not implemented yet
+  gate/                    approval rules and the task journal
   sql/
     memories.sql           Postgres table memory_save writes to
+    approvals.sql          approval records and the operation journal
   docs/
     system.md              systems, capabilities, and what is implemented
     architecture.md
@@ -91,12 +93,12 @@ This repo is being built up in stages before any release image is produced:
 1. Memory schema, env defaults, and collection rules in this repo.
 2. Mattermost as an optional door.
 3. Starter Cabinet charters and an example soul, with no household facts.
-4. This experimental source snapshot — where we are now.
-5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused.
+4. This experimental source snapshot.
+5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, and the mount checks are in this repo.
 6. Doors and devices. The phone opens the Board over the private mesh. One messaging adapter delivers turns and cannot approve. A public tunnel stays off, and if it is enabled later it reaches the Board only.
 7. MCP, both directions, with the allowlist as the default. A catalog wire is one kind of grant.
 8. A browser session on the box for sites with no MCP, behind the same gate.
 9. Optional catalog guests (a media library, Home Assistant), after the agent path works.
 10. Signed updates the owner can see. A Helm chart is only for someone who already runs Kubernetes. It is not how this appliance reaches a phone.
 
-No step past 4 has landed yet.
+The memory bootstrap and the approval gate's first cut are in this repo. The webhook receiver, the coordinated backup, and the USB image are still ahead, and so is every step after them.
