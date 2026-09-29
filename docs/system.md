@@ -1,9 +1,9 @@
 # System architecture
 
 **Status: this is the product we are building. This repository does not
-ship it yet.** There is no USB image and no installer. The picture below
-is the target. The last section says what the files in this repo implement
-today.
+ship it yet.** There is no USB image and no installer. The pictures and
+the sections below are the target. The last section says what the files
+in this repo implement today.
 
 Friday is a local do-it-all agent. The hosted products in this category
 are Meta Muse and Grok Bot: the agent lives on a computer, keeps working
@@ -24,6 +24,94 @@ both directions, and only for tools the owner has accepted. A site with
 no MCP is used through a browser session on this computer. A media
 player or Home Assistant can be installed later, only after an explicit
 approval, and those apps cannot read the memory. They are guests.
+
+## Why a person would run this
+
+A hosted agent in this category already keeps working after the chat
+closes, and it already asks before mail, money, or a machine change
+goes out. It does that on a computer the vendor runs. Friday is for
+the person who wants that job done on a computer in the house, with
+the notes staying there, and with a page they can see.
+
+![A small computer on a shelf in a living room, connected by a cable, with a dark screen beside it](images/house.jpg)
+
+The computer in that picture is the product. It is not an account on
+someone else's machine. One assistant lives on it. A few specialist
+roles, the Cabinet, share that same voice. The first release has one
+owner.
+
+You need it when three ordinary things are true at once.
+
+- The work should continue after you close the chat. A goal goes into
+  a task journal. Friday comes back when a step needs you. Closing the
+  phone does not drop the task.
+- The assistant should not be the root account. It can draft, recall,
+  and use a tool you already allowed. It cannot send, pay, delete,
+  publish, install, or change the machine until you approve that exact
+  step on the Board.
+- The memory should stay on the machine. A turn sends the model at
+  most 8 notes, already trimmed, and only notes that belong to you.
+  The database, the disk, and a shell are not sent with the question.
+
+The page for all of that is one we build, called the Board. It is not
+Open WebUI, LibreChat, or another packaged chat product. The model is
+a plug: any OpenAI-compatible endpoint you already have. The screen is
+ours. Setup does not name a vendor.
+
+![A person at the machine, connecting a cable, with the screen on](images/connect.jpg)
+
+First boot happens on a monitor attached to this computer. There is no
+SSH. The page opens before a network link exists. You connect a cable
+or join Wi-Fi, then you create the server. Creating the server starts
+the core that already shipped in the image, on this computer. Nothing
+in that core is downloaded, and the Board stays at `127.0.0.1:8080`.
+You then give your name, a timezone, and the model key. Chat stays off
+until that key returns a real reply and the local embedding check
+returns 768 dimensions.
+
+![The same computer, closer, the screen showing a quiet conversation](images/conversation.jpg)
+
+The image already carries Friday's character and the Cabinet roles, so
+it knows its job before you explain it. Your notes start empty. After
+you confirm the Board password, the same page becomes the conversation
+and Friday speaks first. It asks what you want set up, in ordinary
+language. You answer the same way. A later app, a phone, or another
+harness is something Friday can ask about then, one confirmed step at
+a time. Those are not questions on the setup form.
+
+![A phone in the foreground, the same computer still on the shelf behind it](images/phone.jpg)
+
+Reach from the phone comes after that, and only when you turn it on.
+The phone opens this same Board over a private mesh. It can ask and it
+can approve. It does not join the network that holds the database. A
+messaging app can deliver a turn and can say "waiting" or "done". It
+cannot approve. A public address is off unless you later turn on a
+tunnel, and that tunnel can reach only the Board.
+
+Optional apps, such as a media player or Home Assistant, are guests.
+They can be useful. They are not why the computer is there. They
+cannot read the memory, and Friday is not on their network.
+
+## The design, stated once
+
+The rest of this page is the same design in more detail. These are the
+decisions, in the order a new reader needs them.
+
+| Decision | What it means |
+|---|---|
+| One computer in the house | Friday is the agent. The model is an OpenAI-compatible plug you supply. Embeddings stay local: `nomic-embed-text`, 768 dimensions. |
+| One page, which we ship | The Board, a small Node process at `127.0.0.1:8080`. Friday has no page and no host port. Open WebUI and LibreChat are not this screen. |
+| First boot is on the attached monitor | Connect a cable or Wi-Fi. Create the server from the core already in the image. Then name, timezone, and the model key. Confirm the Board password. No SSH. A power loss does not mint a second set of secrets. |
+| Friday speaks first | The character and the Cabinet roles ship in the image. Your notes start empty. The first message asks what to set up. A goal that should outlive the turn goes into the task journal. |
+| Memory has an owner | Postgres holds the note. Qdrant holds the vector for that same id. A search without an owner is refused. A turn sends at most 8 notes. A delete removes the vector. |
+| The model cannot approve itself | Send, pay, delete, publish, install, grant, backup, and any other machine change need an approval record. Only the Board creates and exchanges it. Chat, a messaging door, and an outside harness cannot. `confirmed=true` is ignored. The record expires in ten minutes and works once. Catalog install is refused until a later step opens it. |
+| An app event is a fixed sentence | Jellyfin posts `/media`. Radarr and Sonarr post `/arr`, with the header `Friday-Webhook`. Friday may say "A download was grabbed.", "A download failed.", "An app health state changed.", or "An app sent an event." The raw body stays in the log. |
+| Later doors cannot become root | The phone opens the Board. A messaging app delivers turns. MCP runs in both directions, and unlisted tools stay out of the prompt. A site with no MCP uses a disposable browser session that cannot see the password or the card. Apps sit on their own network. |
+| Two disks, two system slots | The system disk is EFI, slot A, slot B, and a data partition. Movies and app files go on a different disk. An upgrade refuses to start when the data partition no longer has room for one backup. |
+
+What is in this repository today is the last section on this page. The
+Board page, the USB image, and a running appliance are not in it yet.
+The memory bootstrap, the approval rules, and the webhook rules are.
 
 ## Why it is split this way
 
