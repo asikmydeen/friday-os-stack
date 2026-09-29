@@ -13,6 +13,8 @@ repository implements today, see [docs/system.md](docs/system.md).
 
 - Not a bootable USB image.
 - Not a tested installer.
+- Not a single disk for both memory and media. Media lives on a separate disk, named when that bundle is approved.
+- The Board is the only host page (`127.0.0.1:8080`). Friday has no host port.
 - No hostnames, secrets, or household facts are included.
 - Not ready for anyone to self-host from.
 
@@ -54,14 +56,14 @@ friday-os-stack/
 
 | Piece | Role |
 |---|---|
-| Friday | Chat, Cabinet turns, console |
-| Board | Discover screen: installed, available, health, grants |
+| Friday | Chat and Cabinet turns. No host port. Reaches memory only through the memory service |
+| Board | The only host page, at `127.0.0.1:8080`: discover, health, grants, and the ask box |
 | Qdrant | Semantic memory, cosine, 768 dimensions |
 | Ollama (`nomic-embed-text`) | Turns a sentence into a vector; chat itself does not run a local model |
 | memory-mcp + Postgres | Durable `memories` row, id shared with the Qdrant point |
 | App executor | Separate process from the chatbot; accepts a named, approved operation only |
 
-Left out of core on purpose: Mattermost, Telegram, Plex, Jellyfin, Radarr, Home Assistant, Coder, Cloudflare, Headscale, and any chat-sized local language model. Those are optional, allowlisted apps installed after the core boots.
+Left out of core on purpose: Mattermost, Telegram, Plex, Jellyfin, Radarr, Home Assistant, Coder, Cloudflare, Headscale, and any chat-sized local language model. Those are optional apps installed after the core boots. An id from the catalog installs only after a render test and an approval. Templates that need host networking, a device, or an extra capability stay listed and refused.
 
 ## Developing against this repo
 

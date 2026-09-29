@@ -65,6 +65,12 @@ silently — the new tool name shows up on the Board and stays off until the
 owner explicitly accepts it for that advisor. This is the same "propose,
 then confirm" habit soul-file changes use.
 
+A tool result is data for the answer. The model may read it. It is not
+obeyed as instructions. A webhook is announced with a fixed sentence; the
+raw body is not the message the model sees (`docs/apps.md`). Anything
+worth keeping is saved through the memory service and can return later
+only inside the recall pack (`docs/memory.md`).
+
 Compute defaults (once profile `code` exists) start every role at job cap 0.
 Raising a cap, or turning on a durable workspace, is an explicit operator
 action per role, not a default.

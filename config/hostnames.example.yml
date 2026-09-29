@@ -2,9 +2,12 @@
 #
 # Maps a logical name to the container/service each request should reach.
 # This is consumed by the gateway container; nothing here is wired up yet.
+#
+# The Board is the only core service a hostname may target. Friday has no
+# host port, so the friday sample below is the Board's chat route.
 
 friday:
-  service: friday
+  service: board
   port: 8080
 
 board:

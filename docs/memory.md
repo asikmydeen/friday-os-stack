@@ -17,9 +17,9 @@
 |---|---|---|---|
 | `friday_profile` | bootstrap | Remembers, and reflection folding episodes into stable facts | The owner's own turns |
 | `friday_episodes` | bootstrap | A short note per turn | Owner recall and the reflection job |
-| `friday_findings` | bootstrap | Research cards, fetched-page summaries | Owner hub search |
+| `friday_findings` | bootstrap | Research cards, fetched-page summaries | This owner's hub search, with an owner filter. A missing filter is refused |
 | `friday_persona` | bootstrap | Stable traits the persona pass extracts | Owner portrait questions |
-| `knowledge` | bootstrap | Decisions/docs the operator asks to keep, tagged with a `topic` | Hub search for every owner turn |
+| `knowledge` | bootstrap | Decisions/docs the operator asks to keep, tagged with a `topic` | This owner's hub search, with an owner filter. A missing filter is refused |
 | `cabinet_working` | bootstrap | A role's scratch notes for the current turn/session | That role only — a search without an owner filter is refused |
 | `role_profile_<role_id>` | first time that role remembers something worth keeping | That role's durable notes | That role only — a search without an owner filter is refused |
 | `person_profile_<person_id>` | first time that person is added | That person's notes | That person's own turns |
@@ -54,6 +54,22 @@ something up on someone's behalf — checks that id. A failed check returns
 nothing from another person's store. A person and a role never share a
 namespace. The first release ships with one owner; a second person is a
 later release, gated on these isolation tests passing.
+
+## Recall pack
+
+Every recall, including hub search over `knowledge` and
+`friday_findings`, filters on `owner_id` and `owner_kind`. A missing
+filter is refused. That holds on the first release, which has one owner,
+so a second person does not require a new layout for these two
+collections.
+
+The memory service returns at most 8 notes, each already trimmed to a
+few hundred words. Friday sends the question and that pack to the chat
+provider. The provider does not receive the database. Tool results and
+fetched pages can be saved as notes through `memory_save`. They are not
+appended to the pack as instructions. A one-character edit is a new live
+row, because the identity includes `md5(content)`. The pack cap is what
+keeps that growth from being sent out in full.
 
 ## Delete/update race safety
 

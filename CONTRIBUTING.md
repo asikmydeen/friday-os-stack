@@ -25,7 +25,9 @@ cp .env.example .env        # then edit .env — see below
 Fill in `.env`:
 - `OWNER_NAME`, `OWNER_TIMEZONE` — your own values, not a placeholder.
 - Exactly one model provider block (`MODEL_API_KEY`, `MODEL_BASE_URL`,
-  `MODEL_THINK`, `MODEL_FAST`).
+  `MODEL_THINK`, `MODEL_FAST`). Product setup keeps chat off until that
+  endpoint returns a real reply (`docs/secrets.md`). Nothing in this repo
+  probes it yet.
 - `BOARD_PASSWORD` may stay blank while you are only reading code — nothing
   here checks it yet. `POSTGRES_USER` may stay blank (the Postgres image
   then uses `postgres`). `POSTGRES_PASSWORD` must be a non-empty local

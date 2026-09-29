@@ -16,13 +16,44 @@ not a suggestion.
 | Secret | Used by |
 |---|---|
 | `FRIDAY_NOTIFY_TOKEN` | Admin endpoints, compared with `hmac.compare_digest`, never `==` |
-| Board password | Dashboard login, shown once on the setup screen |
+| Board password | Dashboard login. Shown on the setup screen until the owner confirms they have saved it, then never echoed again |
 | memory-mcp token | Friday ↔ memory-mcp auth |
 | `QDRANT_API_KEY` | Sent as the `api-key` header; an empty key is a failed bootstrap |
 
 If the model key the owner supplies is missing, chat does not start. If any
 of the four secrets above is empty, Friday exits at startup rather than
 silently running with an open dashboard.
+
+## Setup screen
+
+First boot is a full-screen browser on a monitor attached to the machine.
+There is no SSH. The launcher, not the page, creates a provisioning token
+in a file that only that local user can read. The browser sends it only
+to `http://127.0.0.1:8080/provision`.
+
+That path shows the minted Board password and accepts the display name,
+the timezone, and the chat endpoint. It cannot install an app, change a
+grant, or read memory. Every other path on port 8080 returns 401 without
+the Board password. Dashboard authentication is not turned off to make
+setup work.
+
+The chat endpoint is an OpenAI-compatible base URL, an API key, a fast
+model, and an optional think model. Chat stays off until that endpoint
+returns a real, non-empty reply. The local embed check is separate and
+must return a 768-dimension vector from the pinned model.
+
+The owner confirms they have saved the Board password before setup is
+marked complete. The launcher then deletes the provisioning token and
+`/provision` returns 404. Until that confirmation, every boot returns to
+the same screen and shows the same password. A power loss after the
+secrets exist does not mint a second set.
+
+## Lost Board password
+
+After setup is complete, a lost Board password is replaced from a recovery
+prompt on the text console. The owner opens it from the local keyboard.
+It is not reachable over the network. It shows the new password once and
+leaves memory and the other secrets in place.
 
 ## Connections and app secrets
 
