@@ -1,7 +1,6 @@
-# EXPERIMENTAL — this file is a scaffold, not a tested compose stack.
-# `docker compose up` against this file will not produce a working Friday instance yet:
-# the `friday`, `board`, and `memory-mcp` images referenced below are placeholders
-# and are not published anywhere. See README.md "Build order".
+# The core images build from this repository. They are not published.
+# v0.0.1 does not contain them. Empty secrets make friday, board,
+# memory-mcp, and executor exit. See README.md "Build order".
 
 name: friday-os-stack
 
@@ -39,17 +38,61 @@ services:
 
   memory-mcp:
     <<: *common
-    image: friday-os-stack/memory-mcp:unreleased
+    restart: "no"
+    image: friday-os-stack/memory-mcp:0.1.0
+    build:
+      context: .
+      dockerfile: memoryd/Dockerfile
     profiles: [core, chat]
+    environment:
+      MEMORY_TOKEN: ${MEMORY_TOKEN}
+      QDRANT_API_KEY: ${QDRANT_API_KEY}
+      NOTES_PATH: /data/notes.json
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+    volumes:
+      - memory_data:/data
     depends_on: [postgres, qdrant]
+
+  executor:
+    <<: *common
+    restart: "no"
+    image: friday-os-stack/executor:0.1.0
+    build:
+      context: .
+      dockerfile: executor/Dockerfile
+    profiles: [core, chat]
+    environment:
+      BOARD_APPROVAL_TOKEN: ${BOARD_APPROVAL_TOKEN}
+      FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
+      STORE_PATH: /data/gate.json
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+    volumes:
+      - executor_data:/data
 
   # --- profile: chat ---
   friday:
     <<: *common
-    image: friday-os-stack/friday:unreleased
+    restart: "no"
+    image: friday-os-stack/friday:0.1.0
+    build:
+      context: .
+      dockerfile: friday/Dockerfile
     profiles: [chat]
-    env_file: .env
-    depends_on: [qdrant, ollama, memory-mcp]
+    environment:
+      FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
+      MEMORY_TOKEN: ${MEMORY_TOKEN}
+      MEMORY_URL: http://memory-mcp:8080
+      EXECUTOR_URL: http://executor:8080
+      MODEL_API_KEY: ${MODEL_API_KEY}
+      MODEL_BASE_URL: ${MODEL_BASE_URL}
+      MODEL_FAST: ${MODEL_FAST}
+      MODEL_THINK: ${MODEL_THINK}
+      OLLAMA_URL: http://ollama:11434
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+    depends_on: [memory-mcp, executor, ollama]
     volumes:
       - friday_data:/data
       - ./soul:/soul:ro
@@ -57,9 +100,20 @@ services:
 
   board:
     <<: *common
-    image: friday-os-stack/board:unreleased
+    restart: "no"
+    image: friday-os-stack/board:0.1.0
+    build:
+      context: .
+      dockerfile: board/Dockerfile
     profiles: [chat]
-    env_file: .env
+    environment:
+      BOARD_PASSWORD: ${BOARD_PASSWORD}
+      FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
+      BOARD_APPROVAL_TOKEN: ${BOARD_APPROVAL_TOKEN}
+      FRIDAY_URL: http://friday:8080
+      EXECUTOR_URL: http://executor:8080
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
     depends_on: [friday]
     ports:
       - "127.0.0.1:8080:8080"
@@ -74,9 +128,9 @@ services:
   # Headscale. Off unless HEADSCALE_ENABLED=1.
   # The phone and the laptop join as peers. They do not join this network.
 
-  # Not services in this file yet, and part of the product in docs/system.md:
-  # the task journal, a messaging door, the MCP listener, and the browser
-  # session. Catalog apps stay guests. None of those pieces exist here.
+  # The task journal is the executor's record. A messaging door, the MCP
+  # listener, and the browser session are decisions in this repo and have
+  # no service here. Catalog apps stay guests.
 
 networks:
   core:
@@ -86,3 +140,5 @@ volumes:
   ollama_data:
   postgres_data:
   friday_data:
+  memory_data:
+  executor_data:

@@ -36,9 +36,17 @@ not a suggestion.
 | memory-mcp token | Friday ↔ memory-mcp auth |
 | `QDRANT_API_KEY` | Sent as the `api-key` header; an empty key is a failed bootstrap |
 
-If the model key the owner supplies is missing, chat does not start. If any
-of the four secrets above is empty, Friday exits at startup rather than
-silently running with an open dashboard.
+An empty model key leaves Friday running, and `/ask` returns
+`model_required`. Friday exits when `FRIDAY_NOTIFY_TOKEN` or
+`MEMORY_TOKEN` is empty. The Board exits when `BOARD_PASSWORD`,
+`FRIDAY_NOTIFY_TOKEN`, or `BOARD_APPROVAL_TOKEN` is empty. memory-mcp
+exits when `MEMORY_TOKEN` or `QDRANT_API_KEY` is empty, and it does not
+send the Qdrant key. The executor exits when `BOARD_APPROVAL_TOKEN` or
+`FRIDAY_NOTIFY_TOKEN` is empty. Friday does not receive the Board
+password or the Qdrant key. The Board does not receive the model key,
+the Qdrant key, or the memory token. Notify and memory tokens are
+compared with `hmac.compare_digest` when the lengths match. The Board
+password is an exact match, and the page does not contain it.
 
 ## Setup screen
 

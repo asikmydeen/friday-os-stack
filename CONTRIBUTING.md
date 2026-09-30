@@ -45,10 +45,10 @@ Fill in `.env`:
 
 | Piece | State |
 |---|---|
-| `compose.yml` | Valid Compose file; `friday`, `board`, `memory-mcp` images are named but not published anywhere — `docker compose up` will fail to pull them |
+| `compose.yml` | Builds `friday`, `board`, `memory-mcp`, and `executor` from this tree. The tags are local. They are not in a registry. Empty tokens make those four processes exit, and their restart policy is `no`. v0.0.1 does not contain them |
 | `scripts/bootstrap.sh` | Writes `.env` from the example, then exits with a message — does not run bootstrap-memory yet |
 | `scripts/bootstrap-memory.sh` | Starts Qdrant, Ollama, and Postgres, checks that `nomic-embed-text` is 768 dimensions, creates the six collections, and applies `sql/memories.sql`. Does not start Friday, the Board, or memory-mcp |
-| `gate/`, `sql/approvals.sql` | Approval rules and the task journal. Chat cannot create or exchange an approval. Catalog install is refused. `python3 -m unittest discover -s tests -t .` covers the rules. The executor container is not in Compose |
+| `gate/`, `sql/approvals.sql`, `executor/` | Approval rules and the task journal. Chat cannot create or exchange an approval. Catalog install is refused. The executor records the row and does not send mail or start a container. `python3 -m unittest discover -s tests -t .` covers the rules |
 | `webhooks/`, `sql/webhooks.sql` | An app post is classified and stored. The header `Friday-Webhook` must match that app. The announcement is one fixed sentence. The same unittest command covers `tests/test_webhooks.py`. Compose has no webhooks service |
 | `backup/`, `sql/backup.sql` | Writers pause before the stores are copied. A live SQLite file and a stored passphrase are refused. A failed upgrade restores the backup before the old slot boots. The same unittest command covers `tests/test_backup.py`. Compose has no backup service |
 | `image/`, `tests/test_install.py` | Disk rules, the text-console installer, and the local setup page. The same unittest command covers them. The USB image is a GitHub release, not a file in git. v0.0.1 does not contain Friday, the Board, Docker, or the core containers |
@@ -64,32 +64,33 @@ Fill in `.env`:
 | `scripts/bootstrap-mattermost.py` | Placeholder; exits 1 immediately |
 | `charters/`, `soul/SOUL.example.md` | Real content, usable today as the source of truth for what a charter/soul file should look like |
 | `catalog/wires/*.yml` | Draft wire specs. `draft_ids()` reads the `id:` lines. No renderer or executor consumes them |
-| `docs/*.md` | Design docs describing the target; read these before writing code against this repo, since several pieces (executor, memory-mcp) don't exist here yet |
+| `friday/`, `board/`, `memoryd/`, `runtime/` | The chat process, the Node screen, and the notes service. Notes are a JSON file. Nothing calls `memory_save`, and the service does not write Qdrant. `node --test board/server.test.js` covers the screen |
 
 ## How to work on this repo right now
 
-Since the runnable core (`friday`, `board`, `memory-mcp` images) doesn't
-exist in this repo yet, most contributions fall into one of these buckets:
-
-1. **Docs and specs** (`docs/*.md`, `catalog/wires/*.yml`) — read/edit
-   directly, no infra needed.
-2. **Charters** (`charters/`, `charters/full/`) — plain Markdown with YAML
-   frontmatter; no infra needed to review or add one.
-3. **Compose/scripts scaffolding** (`compose.yml`, `scripts/*`,
-   `sql/memories.sql`) — validate with `docker compose config` (syntax
-   only; it will not start the placeholder images) and `shellcheck
-   scripts/*.sh` if you have it installed.
-4. **Bringing up the infra-only services** (Qdrant, Ollama, Postgres) to
-   develop against them directly, without the `friday`/`board` images:
+1. **The four core processes** (`friday/`, `board/`, `memoryd/`, `executor/`) —
+   `python3 -m unittest discover -s tests -t .` and `node --test board/server.test.js`.
+   `./scripts/smoke-core.sh` builds the images and runs one conversation on a
+   throwaway network. It does not call Compose.
+2. **Docs and specs** (`docs/*.md`, `catalog/wires/*.yml`) — read and edit
+   directly.
+3. **Charters** (`charters/`, `charters/full/`) — plain Markdown with YAML
+   frontmatter.
+4. **Compose and the memory stores** — `docker compose config` checks syntax.
+   Pass `--env-file .env.example` when you do not want your local `.env` in
+   that output. `shellcheck scripts/*.sh` checks the scripts.
 
    ```bash
    # .env must contain a non-empty POSTGRES_PASSWORD or postgres exits.
+   # Leave this alone if those three services are already running for you.
    docker compose --profile core up qdrant ollama postgres
    ```
 
-   `./scripts/bootstrap-memory.sh` is that same slice: it starts these three
-   services, checks the embed model, creates the collections, and applies
-   `sql/memories.sql`. Friday, the Board, and memory-mcp stay stopped.
+   `./scripts/bootstrap-memory.sh` starts those three services, checks the
+   embed model, creates the collections, and applies `sql/memories.sql`.
+   It does not start Friday, the Board, or memory-mcp. A chat-profile start
+   needs the tokens in `.env.example`. Empty tokens make the four processes
+   exit.
 
 ## Secret hygiene before every push
 

@@ -14,8 +14,7 @@
 -- volume, or migrate it explicitly, before relying on the functions below.
 --
 -- This schema is the contract memory_save writes in this repository.
--- The service that calls memory_save is not implemented yet
--- (see README.md "Build order").
+-- memoryd/ keeps notes in a JSON file and does not call memory_save.
 
 CREATE TABLE IF NOT EXISTS memories (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

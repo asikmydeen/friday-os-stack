@@ -11,6 +11,7 @@ if [ ! -f .env ]; then
   exit 1
 fi
 
-echo "bootstrap.sh is not implemented yet beyond writing .env." >&2
-echo "Next: ./scripts/bootstrap-memory.sh, then 'docker compose --profile core --profile chat up'." >&2
+echo "bootstrap.sh writes .env and stops. It does not start Friday." >&2
+echo "The core images build from this tree. See scripts/smoke-core.sh." >&2
+echo "Empty tokens make friday, board, memory-mcp, and executor exit." >&2
 exit 1

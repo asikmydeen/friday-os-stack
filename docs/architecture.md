@@ -12,7 +12,7 @@ repository implements today, is [system.md](system.md).
 
 | Layer | Rule |
 |---|---|
-| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. `webhooks/` and `sql/webhooks.sql` store an app event and keep its body out of the prompt. Compose still has no executor container and no webhooks container, and nothing calls `memory_save` yet. |
+| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `friday/`, `board/`, `memoryd/`, and `executor/` are those processes. Compose builds them. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. `webhooks/` and `sql/webhooks.sql` store an app event and keep its body out of the prompt. Compose has no webhooks container. Notes in the memory service are a file. Nothing calls `memory_save` yet, and the executor does not start a container. |
 | **Agent reach** | Part of the product, off until the owner turns each piece on. The messaging door, the mesh, MCP in both directions, and the browser session. None of these is a catalog app, and none of them can mint an approval. |
 | **Optional apps** | Guests, not the front of the product. A menu rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus Mattermost, Taskrunner, and a Cloudflare tunnel. An id installs only when it is on the allowlist, has a wire, and has passed a render test. Nothing in this layer starts until the owner approves that exact operation. |
 

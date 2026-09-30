@@ -161,8 +161,10 @@ not copy a disk, and Compose has no backup service.
 
 ## `scripts/bootstrap-memory.sh`
 
-`scripts/bootstrap-memory.sh` performs this sequence. The memory service
-that calls `memory_save` is not implemented yet.
+`scripts/bootstrap-memory.sh` performs this sequence. `memoryd/` is the
+notes service Compose calls memory-mcp. It keeps the same owner rules
+in a JSON file. It does not call `memory_save`, and it does not write
+the Qdrant index.
 
 1. Wait until Qdrant (`/readyz`) and Ollama (`/api/tags`) answer.
 2. Confirm `nomic-embed-text` returns a vector of length 768 before any

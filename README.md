@@ -12,7 +12,7 @@ v0.0.1 does not do that finished boot. The stick copies Debian onto a disk you n
 
 A media library, Home Assistant, and the rest of the app catalog can be added later. They are guests. They are not the front of the product.
 
-The docs in this repository are the plan. Nothing here points at a running server. The phone door, the mesh, the MCP bus, the task journal, and the browser session are part of that plan and are not built yet.
+Friday, the Board, the memory service, and the executor are processes in this tree. `scripts/smoke-core.sh` builds those four images and runs one conversation on a throwaway network. That run is not the appliance. The images are not in the v0.0.1 installer, and they are not published to a registry. The phone door, the mesh, the MCP listener, and the browser session are decisions in this repository. They do not listen, and Compose has no service for them.
 
 For the picture of the systems, what each one is for, and what this
 repository implements today, see [docs/system.md](docs/system.md).
@@ -34,6 +34,12 @@ repository implements today, see [docs/system.md](docs/system.md).
 friday-os-stack/
   compose.yml              profiles: core, chat, code, edge, mesh
   .env.example             names only, empty secrets
+  friday/                  the chat process, no host port
+  board/                   the Node screen at 127.0.0.1:8080
+  memoryd/                 notes service; Compose service name memory-mcp
+  executor/                approval and task records; performs nothing
+  runtime/                 the small JSON HTTP server those processes share
+  scripts/smoke-core.sh    build the four images and run one throwaway conversation
   config/
     hostnames.example.yml  which container each hostname hits
   charters/                starter Cabinet advisor charters, generic owner
@@ -67,7 +73,7 @@ friday-os-stack/
     helm/                  only for an existing Kubernetes cluster
 ```
 
-## Core pieces (planned)
+## Core pieces
 
 | Piece | Role |
 |---|---|
@@ -81,6 +87,8 @@ friday-os-stack/
 | Doors | A messaging adapter delivers turns and cannot approve. The mesh makes the phone, the laptop, and the box peers |
 | MCP | Friday calls granted harnesses. Other harnesses call Friday. A new tool stays off until the owner accepts it |
 | Browser session | For sites with no MCP. Disposable, off the core network, credentials kept in the vault |
+
+The four processes above are in this tree and Compose can build them. Notes are a file inside the memory service. That file is not a call to `memory_save`, and this service does not write the Qdrant index. The executor records an approval and does not send mail, pay, or start a container. Catalog install stays closed.
 
 Off until the owner turns them on: the messaging door, the mesh, the public tunnel, the MCP listener, and the browser session. The decisions for those are in `doors/`, `mcpbus/`, and `browser/`. Nothing in those modules listens, and Compose has no service for them. Left out of the product's front on purpose: Mattermost as a required room, Plex, Jellyfin, Radarr, Home Assistant, Coder, and any chat-sized local language model. Those are optional. A catalog id installs only after a render test and an approval. Templates that need host networking, a device, or an extra capability stay listed and refused.
 
@@ -102,11 +110,11 @@ This repo is being built up in stages before any release image is produced:
 2. Mattermost as an optional door.
 3. Starter Cabinet charters and an example soul, with no household facts.
 4. This experimental source snapshot.
-5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, the webhook rules, and the coordinated backup are in this repo. `catalog/discover.py` lists nothing while `catalog/PIN` is empty and refuses every install. `measure/ram.py` decides from numbers the caller supplies. `netpolicy/paths.py` decides that an app may open the webhook receiver and that a core name stays closed. v0.0.1 is a test installer. It does not contain Friday, the Board, Docker, or the core containers, so this step is not finished.
+5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, the webhook rules, and the coordinated backup are in this repo. Friday, the Board, the memory service, and the executor are processes in this tree. `scripts/smoke-core.sh` builds them and runs one conversation on a throwaway network. Notes stay in the memory service's file. Nothing calls `memory_save`. The executor does not perform the approved action. `catalog/discover.py` lists nothing while `catalog/PIN` is empty and refuses every install. `measure/ram.py` decides from numbers the caller supplies. `netpolicy/paths.py` decides that an app may open the webhook receiver and that a core name stays closed. v0.0.1 is a test installer. It does not contain Friday, the Board, Docker, or the core containers, so this step is not finished.
 6. Doors and devices. `doors/reach.py` records the decision: the phone opens the Board over the private mesh, one messaging adapter delivers turns and cannot approve, and a public tunnel stays off. If a tunnel is enabled later it reaches the Board only, after an access check. Nothing in that module listens.
 7. MCP, both directions, with the allowlist as the default. `mcpbus/grants.py` keeps unlisted tools out of the prompt. An inbound mutating call waits for the Board and creates no approval. A catalog wire is one kind of grant and stays off until the owner accepts it.
 8. A browser session on the box for sites with no MCP, behind the same gate. `browser/session.py` keeps credentials with the broker. Read and draft proceed. Send, pay, delete, and publish wait. Compose has no browser network.
 9. Optional catalog guests (a media library, Home Assistant), after the agent path works. `guests/lifecycle.py` keeps install closed. Adopt records an app that is already running. Disconnect leaves that app running. A managed uninstall keeps the video files. Home Assistant is a separate entry.
 10. Signed updates the owner can see. `updates/signed.py` refuses an empty signature and refuses a signature it cannot check, so nothing is applied. The code profile stays off without a Coder URL, and a supplied token still does not start taskrunner. A Helm chart is only for someone who already runs Kubernetes. `deploy/helm/` has no chart. It is not how this appliance reaches a phone.
 
-The memory bootstrap, the approval gate, the webhook receiver, the coordinated backup, and the v0.0.1 test installer are in this repo. The disk image is the GitHub release, not a file in git. The decisions above are in the tree. Nothing new listens. Catalog install stays closed. Helm is unstarted. Step 5 is not finished.
+The memory bootstrap, the approval gate, the webhook receiver, the coordinated backup, the four core processes, and the v0.0.1 test installer are in this repo. The disk image is the GitHub release, not a file in git. The phone door, the mesh, the MCP listener, and the browser session do not listen. Catalog install stays closed. Helm is unstarted. Step 5 is not finished.

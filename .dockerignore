@@ -1,0 +1,11 @@
+.git
+**/.env
+.env
+**/__pycache__
+**/*.pyc
+data
+*.img
+*.img.xz
+*.qcow2
+**/.DS_Store
+*.log

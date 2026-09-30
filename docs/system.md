@@ -233,11 +233,12 @@ The Board is that screen. One small Node process draws it at
 Compose network. Friday has no second screen and no host port.
 
 Open WebUI and LibreChat are not part of the OS. The OpenAI-compatible
-base URL is the model, not the screen. Setup names no vendor. The
-Board image in `compose.yml` is an unpublished placeholder, so the
-Node screen is not running from this repo yet. The v0.0.1 image serves
-a text console and a Python page on `127.0.0.1:8080`. That page is not
-this Board.
+base URL is the model, not the screen. Setup names no vendor. `board/`
+is that Node process. Compose builds it and publishes `127.0.0.1:8080`.
+The v0.0.1 image serves a text console and a Python page on
+`127.0.0.1:8080`. That page is not this Board, and v0.0.1 does not
+contain this process.
+
 A messaging app is a later door. It delivers turns and cannot approve.
 First boot's setup screen is the Board's `/provision` path. It connects
 a cable or Wi-Fi, creates the server on this computer, and takes the
@@ -245,9 +246,11 @@ model key. When that key returns a real reply, the same page is the
 conversation, and Friday speaks first. The sequence is under
 [First boot](#first-boot).
 
-The executor is the only process that creates or changes containers. It
-reaches an app directly so it can health-check it and so an approved
-operation can run. Friday's later questions ("is the movie downloaded?")
+The executor is the process that will create or change containers. The
+one in this tree records the approval and does not start a container,
+send mail, or pay. It reaches an app directly in the target design so
+it can health-check it and so an approved operation can run. Friday's
+later questions ("is the movie downloaded?")
 go through the gateway, not through that control path. A question for
 another harness goes through MCP. A site with no MCP is opened in the
 browser session. Neither path can skip the approval record.
@@ -536,8 +539,8 @@ published host port. Compose publishes only the Board, at
 |---|---|
 | Product rules and this diagram | Written. Target, not a running system. |
 | Cabinet charters and an example soul | Written. Generic. No household facts. |
-| Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. Nothing calls `memory_save` yet. |
-| Compose file | Qdrant, Ollama, and Postgres are real images. Friday, the Board, and the memory service are named images and are not in a registry. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. `docker compose up` does not produce a working appliance. |
+| Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. `memoryd/` keeps notes in a JSON file with the same owner rules. Nothing calls `memory_save`, and the service does not write Qdrant. |
+| Compose file | Qdrant, Ollama, and Postgres are upstream images. Friday, the Board, memory-mcp, and the executor build from this tree as local tags. They are not in a registry and they are not in the v0.0.1 image. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. Empty tokens make the four processes exit. |
 | App wires | Drafts. `catalog/discover.py` reads the `id:` lines and does not install them. The pin is empty, so Discover lists nothing. No renderer reads the wires. |
 | Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
 | Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. `sql/webhooks.sql` stores one typed event. Friday may say one of four fixed sentences. The raw body stays in the log. Compose has no webhooks service and publishes no port for it. |
@@ -549,7 +552,7 @@ published host port. Compose publishes only the Board, at
 | Browser session | `browser/session.py` keeps the secret with the broker. The model gets page text. Read and draft proceed. Send, pay, delete, and publish wait. |
 | Catalog guests | `guests/lifecycle.py` keeps install closed, including the movies and TV bundle. Adopt records `adopted` and starts nothing here. Disconnect leaves the external app running. A managed uninstall keeps the files. Home Assistant is a separate entry. |
 | Signed updates | `updates/signed.py` refuses an empty signature and refuses a signature it cannot check. Nothing is applied. The code profile stays off without a Coder URL, and a supplied token still leaves taskrunner unstarted. |
-| Executor container, gateway, `apps` network | Described. `netpolicy/paths.py` decides the names. Compose has no executor, gateway, or `apps` network. The gate does not start a container. |
+| Executor, gateway, `apps` network | `executor/` records approvals and tasks and does not start a container. `netpolicy/paths.py` decides the names. Compose has no gateway and no `apps` network. |
 | Cloudflare tunnel | `doors/reach.py` keeps the decision off, Board only, and only after an access check if it is ever enabled. No service in Compose. |
 | Helm | `deploy/helm/` has a note and no chart. It waits until the Compose core is proven. |
 | USB image and installer | v0.0.1 test installer in `image/`, flashed from the GitHub release. See [install.md](install.md). Debian and the installer only. No Friday, Board, Docker, or core containers. Setup cannot finish. |
@@ -560,7 +563,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. v0.0.1 does not boot Friday. A pinned catalog list, a measurement of the running core, a packet test, a detached signature, and two physical machines are still ahead.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. A pinned catalog list, a measurement of the running core, a packet test between an app and the core, a detached signature, and two physical machines are still ahead.
 6. Doors and devices. `doors/reach.py` is the first cut. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve. The tunnel stays off. Nothing listens.
 7. MCP, both directions, allowlist by default. `mcpbus/grants.py` is the first cut.
 8. The browser session, behind the same gate. `browser/session.py` is the first cut.
