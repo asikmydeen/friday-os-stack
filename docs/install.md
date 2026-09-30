@@ -4,7 +4,7 @@ v0.0.1 is a disk image you can boot. It is the installer, not the finished appli
 
 Download it from the [v0.0.1 release](https://github.com/asikmydeen/friday-os-stack/releases/tag/v0.0.1). The image is not a file in the git tree.
 
-The source tree's image build packs Docker Engine, Friday, the Board, the memory service, Qdrant, Postgres, Ollama, and `nomic-embed-text`, and it refuses to finish without that payload. It also packs the webhook receiver, the gateway, a catalog snapshot, a display kiosk, and Wi-Fi join. v0.0.1, the file on the release page, does not contain them. A later local image was booted under QEMU. Its serial log printed “The core on this computer was started. Nothing was downloaded.” and did not say the webhook receiver, the gateway, the catalog snapshot, the kiosk, or Wi-Fi join were omitted. That compressed file is over the GitHub release limit, so it is not on the release page.
+The source tree's image build packs Docker Engine, Friday, the Board, the memory service, Qdrant, Postgres, Ollama, and `nomic-embed-text`, and it refuses to finish without that payload. It also packs the webhook receiver, the gateway, a catalog snapshot, a display kiosk, and Wi-Fi join. v0.0.1, the file on the release page, does not contain them. A later local image was booted under QEMU. Its serial log printed “The core on this computer was started. Nothing was downloaded.” and did not say the webhook receiver, the gateway, the catalog snapshot, the kiosk, or Wi-Fi join were omitted. That boot had no graphics device and no wireless adapter, so the kiosk and the Wi-Fi join did not run. The setup screen still said the embed check was not checked, and setup was not finished. That compressed file is over the GitHub release limit, so it is not on the release page.
 
 ## What you are flashing
 
@@ -116,10 +116,10 @@ The page cannot install a catalog app, change a grant, or read owner memory. Rep
 
 Use two disks. The first is the USB image. The second is a new file of at least 64 GB. The installer must refuse to erase the stick, so a one-disk VM is the wrong test. Do not point the emulator at a real disk.
 
-Copy the OVMF variables file before you start. The code file stays read-only. Homebrew often installs them at `/opt/homebrew/share/qemu/edk2-x86_64-code.fd` and `edk2-x86_64-vars.fd`. Debian often uses `/usr/share/OVMF/OVMF_CODE_4M.fd`. Use the firmware that does not turn Secure Boot on.
+Copy the OVMF variables file before you start. The code file stays read-only. Homebrew often installs the code at `/opt/homebrew/share/qemu/edk2-x86_64-code.fd` and the variables at `edk2-i386-vars.fd`. Debian often uses `/usr/share/OVMF/OVMF_CODE_4M.fd`. Use the firmware that does not turn Secure Boot on.
 
 ```bash
-cp /opt/homebrew/share/qemu/edk2-x86_64-vars.fd vars.fd
+cp /opt/homebrew/share/qemu/edk2-i386-vars.fd vars.fd
 truncate -s 64G target.img
 qemu-system-x86_64 \
   -machine q35 \

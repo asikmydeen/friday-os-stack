@@ -121,7 +121,10 @@ v0.0.1 is a test installer you can flash. It does not boot the core.
 A later local image was booted under QEMU, and its serial log printed
 “The core on this computer was started. Nothing was downloaded.” That
 log did not say the webhook receiver, the gateway, the catalog
-snapshot, the kiosk, or Wi-Fi join were omitted. The compressed file
+snapshot, the kiosk, or Wi-Fi join were omitted. The boot had no
+graphics device and no wireless adapter, so the kiosk and the Wi-Fi
+join did not run. The setup screen still said the embed check was not
+checked, and setup was not finished. The compressed file
 is over the GitHub release limit, so v0.0.1 remains the download. The
 memory bootstrap, the approval rules, and the webhook rules are in the
 tree.
@@ -576,7 +579,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. A later local image was booted under QEMU. Its serial log printed “The core on this computer was started. Nothing was downloaded.” and did not say the webhook receiver, the gateway, the catalog snapshot, the kiosk, or Wi-Fi join were omitted. That start uses the embed weights packed in the image. The compressed file is over the GitHub release limit and is not published. `scripts/prove-isolation.sh` is the packet check on throwaway networks. `scripts/prove-embed.sh` pulls `nomic-embed-text` into a throwaway Ollama and receives 768 numbers. A measurement of the running core, a detached signature, and two physical machines are still ahead.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. A later local image was booted under QEMU. Its serial log printed “The core on this computer was started. Nothing was downloaded.” and did not say the webhook receiver, the gateway, the catalog snapshot, the kiosk, or Wi-Fi join were omitted. That start uses the embed weights packed in the image. The setup screen still said the embed check was not checked. The boot had no graphics device and no wireless adapter, so the kiosk and the Wi-Fi join did not run, and setup was not finished. The compressed file is over the GitHub release limit and is not published. `scripts/prove-isolation.sh` is the packet check on throwaway networks. `scripts/prove-embed.sh` pulls `nomic-embed-text` into a throwaway Ollama and receives 768 numbers. A measurement of the running core, a detached signature, and two physical machines are still ahead.
 6. Doors and devices. `doors/reach.py` is the first cut. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve. The tunnel stays off. Nothing listens.
 7. MCP, both directions, allowlist by default. `mcpbus/grants.py` is the first cut.
 8. The browser session, behind the same gate. `browser/session.py` is the first cut.
