@@ -162,9 +162,21 @@ not copy a disk, and Compose has no backup service.
 ## `scripts/bootstrap-memory.sh`
 
 `scripts/bootstrap-memory.sh` performs this sequence. `memoryd/` is the
-notes service Compose calls memory-mcp. It keeps the same owner rules
-in a JSON file. It does not call `memory_save`, and it does not write
-the Qdrant index.
+notes service Compose calls memory-mcp. When `POSTGRES_HOST` is set,
+a save calls `memory_save` and a tombstone calls `memory_tombstone`.
+Recall reads the `memories` table. A worker claims `memory_index_queue`,
+embeds a live row with `nomic-embed-text`, and upserts that point under
+the same id. A tombstone deletes the point. A person note is stored in
+`friday_profile`, an episode in `friday_episodes`, a finding in
+`friday_findings`, a persona note in `friday_persona`, and a knowledge
+note in `knowledge`. A role is stored in `cabinet_working`, so it does
+not share the person's collection. `family_shared`, `person_*`, and
+`role_profile_*` are not created. Search requires `owner_id` and
+`owner_kind`, and the pack stays at 8. Without `POSTGRES_HOST`, those
+same owner rules stay in a JSON file and this SQL is not called.
+`scripts/prove-memory.sh` runs the Postgres path on throwaway
+containers. That proof uses a 768-number stub in place of Ollama.
+v0.0.1 does not contain this service.
 
 1. Wait until Qdrant (`/readyz`) and Ollama (`/api/tags`) answer.
 2. Confirm `nomic-embed-text` returns a vector of length 768 before any

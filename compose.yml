@@ -47,12 +47,16 @@ services:
     environment:
       MEMORY_TOKEN: ${MEMORY_TOKEN}
       QDRANT_API_KEY: ${QDRANT_API_KEY}
-      NOTES_PATH: /data/notes.json
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_URL: http://ollama:11434
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       BIND_HOST: 0.0.0.0
       PORT: "8080"
-    volumes:
-      - memory_data:/data
-    depends_on: [postgres, qdrant]
+    depends_on: [postgres, qdrant, ollama]
 
   executor:
     <<: *common
@@ -140,5 +144,4 @@ volumes:
   ollama_data:
   postgres_data:
   friday_data:
-  memory_data:
   executor_data:

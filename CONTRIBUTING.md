@@ -64,14 +64,15 @@ Fill in `.env`:
 | `scripts/bootstrap-mattermost.py` | Placeholder; exits 1 immediately |
 | `charters/`, `soul/SOUL.example.md` | Real content, usable today as the source of truth for what a charter/soul file should look like |
 | `catalog/wires/*.yml` | Draft wire specs. `draft_ids()` reads the `id:` lines. No renderer or executor consumes them |
-| `friday/`, `board/`, `memoryd/`, `runtime/` | The chat process, the Node screen, and the notes service. Notes are a JSON file. Nothing calls `memory_save`, and the service does not write Qdrant. `node --test board/server.test.js` covers the screen |
+| `friday/`, `board/`, `memoryd/`, `runtime/` | The chat process, the Node screen, and the notes service. With `POSTGRES_HOST` set, saves call `memory_save` and the index worker writes Qdrant. Without it, notes stay in a JSON file. `scripts/prove-memory.sh` covers the Postgres path. `node --test board/server.test.js` covers the screen |
 
 ## How to work on this repo right now
 
 1. **The four core processes** (`friday/`, `board/`, `memoryd/`, `executor/`) —
    `python3 -m unittest discover -s tests -t .` and `node --test board/server.test.js`.
    `./scripts/smoke-core.sh` builds the images and runs one conversation on a
-   throwaway network. It does not call Compose.
+   throwaway network. `./scripts/prove-memory.sh` calls `memory_save` on a
+   throwaway Postgres and indexes one point. Neither script calls Compose.
 2. **Docs and specs** (`docs/*.md`, `catalog/wires/*.yml`) — read and edit
    directly.
 3. **Charters** (`charters/`, `charters/full/`) — plain Markdown with YAML

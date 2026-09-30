@@ -14,7 +14,8 @@
 -- volume, or migrate it explicitly, before relying on the functions below.
 --
 -- This schema is the contract memory_save writes in this repository.
--- memoryd/ keeps notes in a JSON file and does not call memory_save.
+-- memoryd/ calls memory_save when POSTGRES_HOST is set. Without that host
+-- it keeps the same owner rules in a JSON file and does not call this SQL.
 
 CREATE TABLE IF NOT EXISTS memories (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

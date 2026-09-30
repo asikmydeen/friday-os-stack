@@ -539,7 +539,7 @@ published host port. Compose publishes only the Board, at
 |---|---|
 | Product rules and this diagram | Written. Target, not a running system. |
 | Cabinet charters and an example soul | Written. Generic. No household facts. |
-| Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. `memoryd/` keeps notes in a JSON file with the same owner rules. Nothing calls `memory_save`, and the service does not write Qdrant. |
+| Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. `memoryd/` calls `memory_save` when `POSTGRES_HOST` is set, and the index worker upserts or deletes the Qdrant point. A role is stored in `cabinet_working`. Without that host, notes stay in a JSON file. `scripts/prove-memory.sh` uses a 768-number stub in place of Ollama. |
 | Compose file | Qdrant, Ollama, and Postgres are upstream images. Friday, the Board, memory-mcp, and the executor build from this tree as local tags. They are not in a registry and they are not in the v0.0.1 image. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. Empty tokens make the four processes exit. |
 | App wires | Drafts. `catalog/discover.py` reads the `id:` lines and does not install them. The pin is empty, so Discover lists nothing. No renderer reads the wires. |
 | Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
