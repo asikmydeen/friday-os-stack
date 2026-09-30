@@ -149,10 +149,18 @@ when the wire allows that call. A browser name resolves to `internet`
 for a public host and to `core_closed` for a core service. The function
 does not resolve DNS and does not create a Docker network.
 
-The packet test between containers is still ahead. The approval gate
-already refuses a host network and a mount that resolves outside the
-app disk, including through a symlink. Compose still has no executor
-container, no gateway, no `apps` network, and no `browser` network.
+`scripts/prove-isolation.sh` starts Postgres on a throwaway bridge and
+an app container on a throwaway internal network. The app cannot
+resolve the Postgres name and cannot open port 5432. A container on
+the Postgres network can open it. A container attached to both
+networks can open it. That second attachment is the executor's
+position. The app network is internal because, on the Docker that ran
+this proof, a second ordinary bridge still forwarded the address.
+Compose has the executor service on `core` only. It has no `apps`
+network, no `browser` network, and no gateway. The approval gate
+refuses a host network and a mount that resolves outside the app
+disk, including through a symlink. v0.0.1 does not contain these
+networks.
 
 An adopted app is called at an owner-supplied base URL. `vet_adopted`
 refuses a core service name, a link-local address (that range covers
@@ -169,7 +177,8 @@ the prompt. Friday announces a grab, a failure, a health change, or any
 other event with one fixed sentence. The receiver does not call the
 executor and does not write an approval. Compose has no webhooks
 container and no `apps` network. `app_can_open("friday", 8080)` returns
-`core_closed`. That is the decision. The packet test is still ahead.
+`core_closed`. `scripts/prove-isolation.sh` is the packet check for
+Postgres.
 
 ## Approval and mount safety rules
 

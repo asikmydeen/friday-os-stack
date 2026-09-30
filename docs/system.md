@@ -526,7 +526,13 @@ executor's control port. `apps` carries optional apps, a webhook
 receiver, and the gateway. The browser session sits on its own network,
 with a path to the public internet and no path to `core`. The executor
 sits on `core` and `apps`, because it has to health-check an app by its
-Compose DNS name. `webhooks/receiver.py` and `sql/webhooks.sql` store a
+Compose DNS name. `scripts/prove-isolation.sh` starts Postgres on a
+throwaway bridge and an app container on a throwaway internal network.
+The app cannot resolve the Postgres name and cannot open port 5432. A
+container on the Postgres network can. A container attached to both
+networks can. The app side is internal because, on the Docker that ran
+the proof, a second ordinary bridge still forwarded the address.
+`webhooks/receiver.py` and `sql/webhooks.sql` store a
 typed event and do not call the executor. Compose has no webhooks
 service. A mesh peer reaches the Board and the MCP listener
 through an authenticated front. It does not join `core`. Friday has no
@@ -546,13 +552,13 @@ published host port. Compose publishes only the Board, at
 | Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. `sql/webhooks.sql` stores one typed event. Friday may say one of four fixed sentences. The raw body stays in the log. Compose has no webhooks service and publishes no port for it. |
 | Coordinated backup | `backup/` pauses writers, then records Postgres, Qdrant, and SQLite. A live SQLite file is refused. The passphrase stays out of the manifest. Movie files are excluded. A failed upgrade restores that backup before the old system slot boots. Compose has no backup service and this cut does not copy a disk. |
 | Catalog discover and RAM fit | `catalog/discover.py` lists nothing while the pin is empty and refuses every install. `measure/ram.py` decides from supplied numbers. A complete record is `not_a_hardware_measurement`. Two gigabytes is the measurement target. |
-| Network paths | `netpolicy/paths.py` decides which name may open which port. An app may open the webhook receiver. A core name is closed. Compose has no `apps` or `browser` network, so this is a decision, and the packet test is still ahead. |
+| Network paths | `netpolicy/paths.py` decides which name may open which port. An app may open the webhook receiver. A core name is closed. `scripts/prove-isolation.sh` checks the packet on throwaway networks: an app on an internal network leaves Postgres closed by name and by address. Compose has no `apps` or `browser` network. |
 | Doors | `doors/reach.py` delivers a turn from the adapter and refuses an approval from that adapter. The mesh opens the Board and the MCP listener. The tunnel decision stays off. Nothing in the module listens. |
 | MCP grants | `mcpbus/grants.py` shows the intersection of granted and offered tools. An inbound mutating call waits for the Board and creates no approval. A catalog wire stays off until the Board accepts it. |
 | Browser session | `browser/session.py` keeps the secret with the broker. The model gets page text. Read and draft proceed. Send, pay, delete, and publish wait. |
 | Catalog guests | `guests/lifecycle.py` keeps install closed, including the movies and TV bundle. Adopt records `adopted` and starts nothing here. Disconnect leaves the external app running. A managed uninstall keeps the files. Home Assistant is a separate entry. |
 | Signed updates | `updates/signed.py` refuses an empty signature and refuses a signature it cannot check. Nothing is applied. The code profile stays off without a Coder URL, and a supplied token still leaves taskrunner unstarted. |
-| Executor, gateway, `apps` network | `executor/` records approvals and tasks and does not start a container. `netpolicy/paths.py` decides the names. Compose has no gateway and no `apps` network. |
+| Executor, gateway, `apps` network | `executor/` records approvals and tasks and does not start a container. The executor service is on `core` only. `scripts/prove-isolation.sh` shows a container on both throwaway networks can open Postgres, and an app on the internal network cannot. Compose has no gateway and no `apps` network. |
 | Cloudflare tunnel | `doors/reach.py` keeps the decision off, Board only, and only after an access check if it is ever enabled. No service in Compose. |
 | Helm | `deploy/helm/` has a note and no chart. It waits until the Compose core is proven. |
 | USB image and installer | v0.0.1 test installer in `image/`, flashed from the GitHub release. See [install.md](install.md). Debian and the installer only. No Friday, Board, Docker, or core containers. Setup cannot finish. |
@@ -563,7 +569,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. A pinned catalog list, a measurement of the running core, a packet test between an app and the core, a detached signature, and two physical machines are still ahead.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. `scripts/prove-isolation.sh` is the packet check on throwaway networks. A pinned catalog list, a measurement of the running core, that same check inside the image, a detached signature, and two physical machines are still ahead.
 6. Doors and devices. `doors/reach.py` is the first cut. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve. The tunnel stays off. Nothing listens.
 7. MCP, both directions, allowlist by default. `mcpbus/grants.py` is the first cut.
 8. The browser session, behind the same gate. `browser/session.py` is the first cut.

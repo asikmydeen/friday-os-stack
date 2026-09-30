@@ -54,7 +54,7 @@ Fill in `.env`:
 | `image/`, `tests/test_install.py` | Disk rules, the text-console installer, and the local setup page. The same unittest command covers them. The USB image is a GitHub release, not a file in git. v0.0.1 does not contain Friday, the Board, Docker, or the core containers |
 | `catalog/discover.py`, `tests/test_discover.py` | Lists a pin. The pin in this repo is empty, so the list is empty. Every install returns `catalog_install_closed`. Draft wires are not installed |
 | `measure/ram.py`, `tests/test_ram.py` | Decides from numbers the caller supplies. A complete record is `not_a_hardware_measurement`. `fits` refuses declared memory above free RAM |
-| `netpolicy/paths.py`, `tests/test_netpolicy.py` | Decides which name may open which port. Does not create a Docker network |
+| `netpolicy/paths.py`, `tests/test_netpolicy.py` | Decides which name may open which port. Does not create a Docker network. `scripts/prove-isolation.sh` does that check with two throwaway networks. The app network is internal |
 | `doors/reach.py`, `tests/test_doors.py` | The adapter delivers a turn and cannot approve. The mesh opens the Board. The tunnel stays off. Nothing listens |
 | `mcpbus/grants.py`, `tests/test_grants.py` | Visible tools are the granted names the server also offers. A mutating inbound call waits and creates no approval |
 | `browser/session.py`, `tests/test_browser.py` | The broker holds the secret. Read and draft proceed. Send, pay, delete, and publish wait |
@@ -72,7 +72,9 @@ Fill in `.env`:
    `python3 -m unittest discover -s tests -t .` and `node --test board/server.test.js`.
    `./scripts/smoke-core.sh` builds the images and runs one conversation on a
    throwaway network. `./scripts/prove-memory.sh` calls `memory_save` on a
-   throwaway Postgres and indexes one point. Neither script calls Compose.
+   throwaway Postgres and indexes one point. `./scripts/prove-isolation.sh`
+   checks that an app container on an internal network leaves Postgres
+   closed. None of these scripts call Compose.
 2. **Docs and specs** (`docs/*.md`, `catalog/wires/*.yml`) — read and edit
    directly.
 3. **Charters** (`charters/`, `charters/full/`) — plain Markdown with YAML
