@@ -52,9 +52,18 @@ Fill in `.env`:
 | `webhooks/`, `sql/webhooks.sql` | An app post is classified and stored. The header `Friday-Webhook` must match that app. The announcement is one fixed sentence. The same unittest command covers `tests/test_webhooks.py`. Compose has no webhooks service |
 | `backup/`, `sql/backup.sql` | Writers pause before the stores are copied. A live SQLite file and a stored passphrase are refused. A failed upgrade restores the backup before the old slot boots. The same unittest command covers `tests/test_backup.py`. Compose has no backup service |
 | `image/`, `tests/test_install.py` | Disk rules, the text-console installer, and the local setup page. The same unittest command covers them. The USB image is a GitHub release, not a file in git. v0.0.1 does not contain Friday, the Board, Docker, or the core containers |
+| `catalog/discover.py`, `tests/test_discover.py` | Lists a pin. The pin in this repo is empty, so the list is empty. Every install returns `catalog_install_closed`. Draft wires are not installed |
+| `measure/ram.py`, `tests/test_ram.py` | Decides from numbers the caller supplies. A complete record is `not_a_hardware_measurement`. `fits` refuses declared memory above free RAM |
+| `netpolicy/paths.py`, `tests/test_netpolicy.py` | Decides which name may open which port. Does not create a Docker network |
+| `doors/reach.py`, `tests/test_doors.py` | The adapter delivers a turn and cannot approve. The mesh opens the Board. The tunnel stays off. Nothing listens |
+| `mcpbus/grants.py`, `tests/test_grants.py` | Visible tools are the granted names the server also offers. A mutating inbound call waits and creates no approval |
+| `browser/session.py`, `tests/test_browser.py` | The broker holds the secret. Read and draft proceed. Send, pay, delete, and publish wait |
+| `guests/lifecycle.py`, `tests/test_guests.py` | Install stays closed. Adopt records `adopted` and starts nothing here. A managed uninstall keeps the files |
+| `updates/signed.py`, `tests/test_updates.py` | An empty signature is unsigned. A signature string is `signature_not_checked` and is not applied. The code profile does not start taskrunner |
+| `deploy/helm/` | A note. No chart. It waits until the Compose core is proven |
 | `scripts/bootstrap-mattermost.py` | Placeholder; exits 1 immediately |
 | `charters/`, `soul/SOUL.example.md` | Real content, usable today as the source of truth for what a charter/soul file should look like |
-| `catalog/wires/*.yml` | Draft wire specs — not yet consumed by any renderer or executor |
+| `catalog/wires/*.yml` | Draft wire specs. `draft_ids()` reads the `id:` lines. No renderer or executor consumes them |
 | `docs/*.md` | Design docs describing the target; read these before writing code against this repo, since several pieces (executor, memory-mcp) don't exist here yet |
 
 ## How to work on this repo right now

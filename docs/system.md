@@ -499,7 +499,9 @@ embed model, Postgres, the memory service. `chat` adds Friday and the
 Board. `code`, `edge`, and `mesh` are later profiles (task runner,
 tunnel, mesh) and are empty in this repository. The task journal, the
 messaging door, the MCP listener, and the browser session are part of
-the product and have no profile in the file yet.
+the product and have no profile in the file yet. `doors/reach.py`,
+`mcpbus/grants.py`, and `browser/session.py` record those decisions.
+Nothing in them listens.
 
 Catalog apps are not written here, and they are not required for the
 agent to be useful. A pin records the upstream commit of the Compose
@@ -536,13 +538,20 @@ published host port. Compose publishes only the Board, at
 | Cabinet charters and an example soul | Written. Generic. No household facts. |
 | Memory rules and `sql/memories.sql` | Written. `scripts/bootstrap-memory.sh` creates the six collections, checks the 768-dimension embed, and applies the SQL. Nothing calls `memory_save` yet. |
 | Compose file | Qdrant, Ollama, and Postgres are real images. Friday, the Board, and the memory service are named images and are not in a registry. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. `docker compose up` does not produce a working appliance. |
-| App wires | Drafts only. The catalog pin is empty. No renderer or executor reads them. |
+| App wires | Drafts. `catalog/discover.py` reads the `id:` lines and does not install them. The pin is empty, so Discover lists nothing. No renderer reads the wires. |
 | Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
 | Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. `sql/webhooks.sql` stores one typed event. Friday may say one of four fixed sentences. The raw body stays in the log. Compose has no webhooks service and publishes no port for it. |
 | Coordinated backup | `backup/` pauses writers, then records Postgres, Qdrant, and SQLite. A live SQLite file is refused. The passphrase stays out of the manifest. Movie files are excluded. A failed upgrade restores that backup before the old system slot boots. Compose has no backup service and this cut does not copy a disk. |
-| Executor container, gateway, `apps` network | Described. Not in the Compose file. The gate does not start a container. |
-| Messaging door, mesh peers, MCP bus, browser session | Described. Not in the Compose file. Off until the owner turns each one on. |
-| Cloudflare tunnel | Described, default off, Board only. No service in Compose. |
+| Catalog discover and RAM fit | `catalog/discover.py` lists nothing while the pin is empty and refuses every install. `measure/ram.py` decides from supplied numbers. A complete record is `not_a_hardware_measurement`. Two gigabytes is the measurement target. |
+| Network paths | `netpolicy/paths.py` decides which name may open which port. An app may open the webhook receiver. A core name is closed. Compose has no `apps` or `browser` network, so this is a decision, and the packet test is still ahead. |
+| Doors | `doors/reach.py` delivers a turn from the adapter and refuses an approval from that adapter. The mesh opens the Board and the MCP listener. The tunnel decision stays off. Nothing in the module listens. |
+| MCP grants | `mcpbus/grants.py` shows the intersection of granted and offered tools. An inbound mutating call waits for the Board and creates no approval. A catalog wire stays off until the Board accepts it. |
+| Browser session | `browser/session.py` keeps the secret with the broker. The model gets page text. Read and draft proceed. Send, pay, delete, and publish wait. |
+| Catalog guests | `guests/lifecycle.py` keeps install closed, including the movies and TV bundle. Adopt records `adopted` and starts nothing here. Disconnect leaves the external app running. A managed uninstall keeps the files. Home Assistant is a separate entry. |
+| Signed updates | `updates/signed.py` refuses an empty signature and refuses a signature it cannot check. Nothing is applied. The code profile stays off without a Coder URL, and a supplied token still leaves taskrunner unstarted. |
+| Executor container, gateway, `apps` network | Described. `netpolicy/paths.py` decides the names. Compose has no executor, gateway, or `apps` network. The gate does not start a container. |
+| Cloudflare tunnel | `doors/reach.py` keeps the decision off, Board only, and only after an access check if it is ever enabled. No service in Compose. |
+| Helm | `deploy/helm/` has a note and no chart. It waits until the Compose core is proven. |
 | USB image and installer | v0.0.1 test installer in `image/`, flashed from the GitHub release. See [install.md](install.md). Debian and the installer only. No Friday, Board, Docker, or core containers. Setup cannot finish. |
 
 Build order, and where we are:
@@ -551,9 +560,9 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, and the coordinated backup are in the tree. v0.0.1 does not boot Friday.
-6. Doors and devices. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve.
-7. MCP, both directions, allowlist by default.
-8. The browser session, behind the same gate.
-9. Optional catalog guests, including a media library and Home Assistant.
-10. Signed updates the owner can see. Helm only for an existing Kubernetes cluster.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. v0.0.1 does not boot Friday. A pinned catalog list, a measurement of the running core, a packet test, a detached signature, and two physical machines are still ahead.
+6. Doors and devices. `doors/reach.py` is the first cut. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve. The tunnel stays off. Nothing listens.
+7. MCP, both directions, allowlist by default. `mcpbus/grants.py` is the first cut.
+8. The browser session, behind the same gate. `browser/session.py` is the first cut.
+9. Optional catalog guests, including a media library and Home Assistant. `guests/lifecycle.py` keeps install closed until the agent path works.
+10. Signed updates the owner can see. `updates/signed.py` refuses a signature it cannot check. Helm, for an existing Kubernetes cluster, is unstarted.

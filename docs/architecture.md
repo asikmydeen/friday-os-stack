@@ -140,21 +140,27 @@ network. Advisors reach an app only through the gateway, which also sits
 on both networks and allows only the method and path a wire file names
 for that advisor. The diagram shows that split: Friday's request goes
 through the gateway, and the executor's health check goes to the app.
-An app container cannot open Postgres, Qdrant, or the executor's control
-port; that boundary is meant to be a packet test between containers.
-The approval gate already refuses a host network and a mount that
-resolves outside the app disk, including through a symlink. There is
-still no executor container, gateway, `apps` network, or `browser`
-network in this repo, so that refusal is not yet a test between containers.
+`netpolicy/paths.py` decides that split from names and ports the caller
+supplies. An app may open `webhooks` on port 8080. Opening Postgres,
+Qdrant, Friday, memory-mcp, the executor, or the gateway is
+`core_closed`. The executor may health-check an app name such as
+`jellyfin` on port 8096. An advisor opens `gateway` on port 8090 only
+when the wire allows that call. A browser name resolves to `internet`
+for a public host and to `core_closed` for a core service. The function
+does not resolve DNS and does not create a Docker network.
 
-An adopted app is called at an owner-supplied base URL. That address is
-resolved before any health call or tool call. It is refused when it
-points at Postgres, Qdrant, the memory service, the executor, the
-gateway's core listener, any other core service name, a link-local
-address, or a host metadata address. A mesh peer is held to the same
-line: it may open the Board and the authenticated MCP listener, and it
-may not open Postgres, Qdrant, or the executor's control port. Joining
-the mesh is not joining `core`.
+The packet test between containers is still ahead. The approval gate
+already refuses a host network and a mount that resolves outside the
+app disk, including through a symlink. Compose still has no executor
+container, no gateway, no `apps` network, and no `browser` network.
+
+An adopted app is called at an owner-supplied base URL. `vet_adopted`
+refuses a core service name, a link-local address (that range covers
+169.254.169.254), or `metadata.google.internal`. A private LAN address
+can be an adopted app. A mesh peer is held to the same line in
+`doors/reach.py`: it may open the Board and the authenticated MCP
+listener, and it may not open Postgres, Qdrant, or the executor's
+control port. Joining the mesh is not joining `core`.
 
 The webhook receiver is the only process an app may call, and only with
 the header `Friday-Webhook`. `webhooks/receiver.py` and
@@ -162,8 +168,8 @@ the header `Friday-Webhook`. `webhooks/receiver.py` and
 the prompt. Friday announces a grab, a failure, a health change, or any
 other event with one fixed sentence. The receiver does not call the
 executor and does not write an approval. Compose has no webhooks
-container and no `apps` network, so this repo cannot yet show an app
-failing to open `friday:8080`.
+container and no `apps` network. `app_can_open("friday", 8080)` returns
+`core_closed`. That is the decision. The packet test is still ahead.
 
 ## Approval and mount safety rules
 
@@ -193,7 +199,9 @@ failing to open `friday:8080`.
 - Ports bind to `127.0.0.1` on the host unless a separate, later
   publication approval names that route explicitly.
 - The image architecture must match the host, and the declared memory must
-  fit measured free RAM.
+  fit measured free RAM. `measure/ram.py` decides that fit from numbers
+  the caller supplies. A complete sample is recorded as
+  `not_a_hardware_measurement`. Two gigabytes is the measurement target.
 
 ## Task journal
 
@@ -228,7 +236,9 @@ task is running stays off until the owner accepts it on the Board.
 The messaging adapter cannot call the executor, write an approval, or
 read Postgres. Mattermost and a token-based chat app are implementations
 of this adapter. Neither one is required for Friday to answer on the
-Board. No adapter is enabled at first boot.
+Board. No adapter is enabled at first boot. `doors/reach.py` records
+the adapter, the mesh, and the tunnel. The tunnel decision stays off.
+The module does not listen.
 
 ## Devices
 
@@ -258,7 +268,8 @@ Postgres. The caller does not receive the Qdrant key.
 
 A catalog wire is an outbound grant whose "tools" are the method and
 path in that wire. The acceptance rule is the same: a new name stays
-off until the owner accepts it.
+off until the owner accepts it. `mcpbus/grants.py` is that decision.
+It does not open a listener and it does not create an approval.
 
 ## Browser session
 
@@ -272,10 +283,14 @@ Send, pay, delete, and publish inside the session are sensitive steps.
 They wait for an approval record that names the action. The session is
 discarded when the task finishes or the owner stops it. A page fetched
 this way is evidence, under the same rule as a webhook body.
+`browser/session.py` keeps the secret with the broker and lets read and
+draft proceed. It does not start a browser.
 
 ## What this repo is building toward
 
 See the repo README for the Compose profiles and the build order. The
 task journal, doors, mesh peers, MCP bus, and browser session are in
 that order after the gate, and ahead of catalog guests. This document
-describes the target. Those pieces are not in `compose.yml` yet.
+describes the target. Compose has no service for those pieces yet. The
+decisions are in `doors/`, `mcpbus/`, `browser/`, `guests/`, and
+`updates/`.

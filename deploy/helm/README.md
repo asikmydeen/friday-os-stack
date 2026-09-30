@@ -1,6 +1,6 @@
 # Helm chart (planned)
 
-Not started. This chart is for someone who already runs Kubernetes. It
+Not started. The chart waits until the Compose core is proven. This chart is for someone who already runs Kubernetes. It
 is not how a household reaches Friday from a phone, and the appliance
 does not wait on it. See the build order in the repo README.
 

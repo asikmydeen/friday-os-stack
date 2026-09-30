@@ -1,12 +1,12 @@
 # Pinned commit of https://github.com/truenas/apps this catalog renders
-# against. Not filled in yet — this repo is at build-order step 4
-# (experimental source snapshot). Step 5 is the executor. The catalog-render
-# pipeline and the first allowlisted wires are step 6 (README "Build order").
+# against. Empty. catalog/discover.py lists nothing from upstream.
+# Install stays closed. Files in catalog/wires/ are drafts, and no
+# renderer consumes them.
 #
 # Format once populated:
 #   commit: <full 40-char sha>
 #   trains: [stable, community]
 #   pinned_at: <date>
 #
-# LGPL-3.0. This file records a pin only — the upstream tree is never
-# copied into this repo's git history.
+# LGPL-3.0. This file records a pin only. The upstream tree stays out of
+# this repo's git history. The enterprise train stays off.

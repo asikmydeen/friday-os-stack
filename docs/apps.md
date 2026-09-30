@@ -1,6 +1,6 @@
 # Grants and the app catalog
 
-**Status: draft, no install path is functional yet.**
+**Status: draft.** `catalog/discover.py` lists nothing while `catalog/PIN` is empty, and install stays closed. No install path starts a container.
 
 The product is the agent. Apps are guests. Friday reaches other agent
 harnesses, and the sites that have no harness, without installing a
@@ -21,7 +21,10 @@ The caller does not get the Qdrant key, and the listener is not on the
 Docker network that holds Postgres.
 
 A new tool name, from a server or from a catalog upgrade, stays off
-until the owner accepts it on the Board.
+until the owner accepts it on the Board. `mcpbus/grants.py` is that
+decision: the prompt sees the intersection of granted and offered
+names, an inbound mutating call waits, and a wire stays off until the
+Board accepts it. The module does not open a listener.
 
 ## Where apps come from
 
@@ -74,16 +77,20 @@ the underlying data files without a separate, explicit confirm.
 
 Every installed app row is `managed` (this stack started it) or `adopted`
 (it was already running somewhere else, e.g. on an existing TrueNAS/Plex
-setup). An adopted app is only ever observed and called through
-owner-granted tools — this stack never restarts, upgrades, or uninstalls an
-adopted service, and disconnecting one just removes Friday's URL, grants,
-and health check.
+setup). `guests/lifecycle.py` records that choice. Install of a guest,
+including the movies and TV bundle, stays closed while the agent path
+is not running. Adopt records `adopted` and starts nothing here.
+Disconnecting an adopted app removes Friday's URL, grants, and health
+check, and leaves the external app running. A managed uninstall keeps
+the video files. Deleting those files is a separate confirm. Home
+Assistant is a separate entry, not part of the bundle.
 
 The base URL of an adopted app is resolved before any health call or tool
 call. It is refused when it points at Postgres, Qdrant, the memory
 service, the executor, the gateway's core listener, any other core
-service name, a link-local address, or a host metadata address. See
-`docs/architecture.md`.
+service name, a link-local address, or a host metadata address.
+`vet_adopted` in `netpolicy/paths.py` is that check. A private LAN address
+can be an adopted app. See `docs/architecture.md`.
 
 ## Events from apps
 
