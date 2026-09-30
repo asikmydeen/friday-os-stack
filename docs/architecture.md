@@ -1,6 +1,9 @@
 # Architecture
 
 **Status: draft. This describes the target design, not a built system.**
+`image/` is the v0.0.1 test installer, and [install.md](install.md) is
+how to flash it. That image does not contain Friday, the Board, the
+memory service, Qdrant, Postgres, Ollama, or Docker.
 
 The customer-facing picture of the same target, including what this
 repository implements today, is [system.md](system.md).
@@ -167,7 +170,9 @@ failing to open `friday:8080`.
 - The system disk is an EFI partition, two system slots, and a data
   partition. The first image target is one x86_64 disk of at least 64 GB:
   512 MB EFI, two 16 GB system slots, and a data partition that fills the
-  rest, with at least 16 GB free after install.
+  rest, with at least 16 GB free after install. The v0.0.1 installer
+  writes that layout and boots slot A. It records slot B and does not
+  switch to it.
 - The data partition holds the machine id, secrets, Postgres, Qdrant,
   SQLite, the soul, the executor journal, and free space for one
   pre-upgrade backup. An upgrade refuses to start when that free space is

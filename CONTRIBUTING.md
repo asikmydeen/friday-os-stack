@@ -1,8 +1,9 @@
 # Contributing / local development
 
-**Status: draft. Most of the pipeline below (steps 5+ of the build order in
-`README.md`) is not implemented yet — this is what running against this
-repo today actually looks like, plus what changes once each step lands.**
+**Status: draft.** The v0.0.1 test installer is in `image/`. The finished
+appliance, and steps 6 onward in the README build order, are not
+implemented yet. This page is what running against this repo today
+actually looks like.
 The product those steps are building is the local agent in
 `docs/system.md`: a computer in the house, doors, devices, MCP, and a
 browser session, with the catalog as a guest.
@@ -13,8 +14,8 @@ browser session, with the catalog as a guest.
 - A model API key for whichever provider you'll point `MODEL_API_KEY` /
   `MODEL_BASE_URL` at (see `.env.example`). This stack does not ship a
   chat-sized local model.
-- Python 3.11+ if you're working on `scripts/bootstrap-mattermost.py` or any
-  future Python tooling in this repo.
+- Python 3.11+ for `image/`, `gate/`, `webhooks/`, `backup/`, and
+  `scripts/bootstrap-mattermost.py`.
 - `git` and (optionally) the GitHub CLI (`gh`) if you're opening PRs.
 
 ## First-time setup
@@ -50,6 +51,7 @@ Fill in `.env`:
 | `gate/`, `sql/approvals.sql` | Approval rules and the task journal. Chat cannot create or exchange an approval. Catalog install is refused. `python3 -m unittest discover -s tests -t .` covers the rules. The executor container is not in Compose |
 | `webhooks/`, `sql/webhooks.sql` | An app post is classified and stored. The header `Friday-Webhook` must match that app. The announcement is one fixed sentence. The same unittest command covers `tests/test_webhooks.py`. Compose has no webhooks service |
 | `backup/`, `sql/backup.sql` | Writers pause before the stores are copied. A live SQLite file and a stored passphrase are refused. A failed upgrade restores the backup before the old slot boots. The same unittest command covers `tests/test_backup.py`. Compose has no backup service |
+| `image/`, `tests/test_install.py` | Disk rules, the text-console installer, and the local setup page. The same unittest command covers them. The USB image is a GitHub release, not a file in git. v0.0.1 does not contain Friday, the Board, Docker, or the core containers |
 | `scripts/bootstrap-mattermost.py` | Placeholder; exits 1 immediately |
 | `charters/`, `soul/SOUL.example.md` | Real content, usable today as the source of truth for what a charter/soul file should look like |
 | `catalog/wires/*.yml` | Draft wire specs — not yet consumed by any renderer or executor |

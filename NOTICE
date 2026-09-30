@@ -10,5 +10,6 @@ to the terms and conditions of the respective licenses.
 - The app catalog under catalog/ is rendered from a pinned snapshot of
   https://github.com/truenas/apps (see catalog/PIN for the commit).
 
-This is an early, experimental scaffold. This NOTICE will be expanded with
-exact versions and license texts before any tagged release.
+The v0.0.1 USB image contains Debian packages under their own licenses.
+The release notes record the Debian version and the package list for that
+artifact. v0.0.1 does not contain Qdrant, Ollama, or TrueNAS.

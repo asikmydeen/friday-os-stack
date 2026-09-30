@@ -1,6 +1,22 @@
 # Secrets
 
-**Status: draft.**
+**Status: draft.** The rules below are the target. The v0.0.1 test
+image follows the secret rules and cannot finish setup. See
+[install.md](install.md).
+
+## v0.0.1 test image
+
+The image ships with an empty machine id, no SSH host keys, no default
+password, and no application secrets. On the installed system it mints
+the Board password, the notify token, the memory token, and the Qdrant
+key once, on the data partition. A power loss does not mint a second
+set. The screen shows the Board password until setup completes.
+
+This image cannot complete setup. The embed model is not in it, so the
+provisioning token stays and `/provision` does not return 404. The page
+says Friday does not speak. The page is not the Node Board. There is no
+SSH. Password recovery is the local keyboard, and only after setup is
+complete, so that prompt is not available in this image.
 
 ## What never ships baked into an image
 

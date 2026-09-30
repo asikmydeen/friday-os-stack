@@ -5,3 +5,6 @@
 __pycache__/
 *.pyc
 data/
+*.img
+*.img.xz
+*.qcow2

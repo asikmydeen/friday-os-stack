@@ -1,12 +1,14 @@
 # friday-os-stack
 
-**Status: experimental scaffolding. No release image exists yet. Do not run `bootstrap.sh` expecting a working appliance.**
+**Status: experimental. [v0.0.1](docs/install.md) is a test installer you can flash, not the finished appliance. Do not run `bootstrap.sh` expecting a working Friday.**
 
 Friday is the operating system for one always-on computer in the house. The release is a disk image. You reach it from your phone and from a chat app, and from the Board on the machine. It remembers on that computer. It calls the other AI harnesses you run, and they can call it, through MCP, with each tool granted by you. A site with no MCP is used through a browser session on the same computer. Work continues after you close the chat, and Friday comes back when it needs a decision. It cannot send, pay, delete, publish, or change the machine until you approve that exact action.
 
 Meta Muse and Grok Bot are the hosted products in this category. Each gives the agent a computer, keeps working after the chat closes, and asks before mail, money, or a machine change goes out. Those computers sit in the vendor's cloud. This one sits in the house, and Friday is the operating system on it. The chat model is a plug: any OpenAI-compatible endpoint. Friday is the computer, the memory, and the gate.
 
-On first boot the owner uses a monitor on that computer. The screen connects a cable or Wi-Fi, creates the server on this computer, and takes the model key. Friday then asks, on the Board, what to set up. That screen is not built yet.
+On first boot the owner uses a monitor on that computer. The screen connects a cable or Wi-Fi, creates the server on this computer, and takes the model key. Friday then asks, on the Board, what to set up.
+
+v0.0.1 does not do that finished boot. The stick copies Debian onto a disk you name. Its screen is a text console, plus a page at `127.0.0.1:8080`. Friday does not speak, the embed model is not in the image, and setup cannot finish. The flash steps are in [docs/install.md](docs/install.md).
 
 A media library, Home Assistant, and the rest of the app catalog can be added later. They are guests. They are not the front of the product.
 
@@ -18,8 +20,8 @@ repository implements today, see [docs/system.md](docs/system.md).
 ## What this is not (yet)
 
 - Not an app you install on another operating system. The release is a disk image.
-- Not a bootable USB image.
-- Not a tested installer.
+- v0.0.1 is a bootable x86_64 UEFI test installer. It contains Debian and the installer. It does not contain Friday, the Board, Docker, or the core containers.
+- Not a finished first boot, and not yet tried on two physical machines.
 - Not a hosted agent account, and not a chat window in front of someone else's computer.
 - Not a media-box distribution. A library can be added later, on its own disk.
 - The Board is the only host page (`127.0.0.1:8080`). Friday has no host port. Nothing else is reachable until the owner turns a door on.
@@ -46,6 +48,7 @@ friday-os-stack/
     memories.sql           Postgres table memory_save writes to
     approvals.sql          approval records and the operation journal
   docs/
+    install.md             verify and flash the v0.0.1 test installer
     system.md              systems, capabilities, and what is implemented
     architecture.md
     memory.md              collections, payloads, backup, second speaker
@@ -54,6 +57,8 @@ friday-os-stack/
     cloudflare.md
     headscale.md
     apps.md                grants, MCP, catalog, bundles, adopt-existing
+  image/                   installer rules and the x86_64 image build
+  tests/test_install.py    disk rules, setup screen, and the pre-release scan
   catalog/
     PIN                    commit of github.com/truenas/apps we render
     wires/                 our understanding of an upstream app id
@@ -87,7 +92,7 @@ before you push.
 
 ## License
 
-Apache-2.0 (see `LICENSE`), unless changed before the first tagged release.
+Apache-2.0 (see `LICENSE`).
 
 ## Build order
 
@@ -97,11 +102,11 @@ This repo is being built up in stages before any release image is produced:
 2. Mattermost as an optional door.
 3. Starter Cabinet charters and an example soul, with no household facts.
 4. This experimental source snapshot.
-5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, the webhook rules, and the coordinated backup are in this repo.
+5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, the webhook rules, and the coordinated backup are in this repo. v0.0.1 is a test installer. It does not contain Friday, the Board, Docker, or the core containers, so this step is not finished.
 6. Doors and devices. The phone opens the Board over the private mesh. One messaging adapter delivers turns and cannot approve. A public tunnel stays off, and if it is enabled later it reaches the Board only.
 7. MCP, both directions, with the allowlist as the default. A catalog wire is one kind of grant.
 8. A browser session on the box for sites with no MCP, behind the same gate.
 9. Optional catalog guests (a media library, Home Assistant), after the agent path works.
 10. Signed updates the owner can see. A Helm chart is only for someone who already runs Kubernetes. It is not how this appliance reaches a phone.
 
-The memory bootstrap, the approval gate, the webhook receiver, and the coordinated backup are in this repo. The USB image is still ahead, and so is every step after it.
+The memory bootstrap, the approval gate, the webhook receiver, the coordinated backup, and the v0.0.1 test installer are in this repo. The disk image is the GitHub release, not a file in git. The finished appliance, and every step after 5, are still ahead.

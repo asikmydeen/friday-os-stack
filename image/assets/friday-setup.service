@@ -1,0 +1,21 @@
+[Unit]
+Description=Friday setup
+After=local-fs.target systemd-networkd.service
+ConditionPathExists=/etc/friday-role
+
+[Service]
+Type=simple
+Environment=PYTHONPATH=/usr/lib/friday
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/usr/bin/python3 -m image.main
+Restart=on-failure
+RestartSec=2
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+TTYReset=yes
+TTYVHangup=yes
+
+[Install]
+WantedBy=multi-user.target

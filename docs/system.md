@@ -1,9 +1,9 @@
 # System architecture
 
-**Status: this is the product we are building. This repository does not
-ship it yet.** There is no USB image and no installer. The pictures and
-the sections below are the target. The last section says what the files
-in this repo implement today.
+**Status: this is the product we are building.** v0.0.1 is a test
+installer, described in [install.md](install.md). It is not this finished
+system. The pictures and the sections below are the target. The last
+section says what the files in this repo implement today.
 
 Friday is the operating system. The release is a disk image for one
 computer in the house. You install that image, and the computer runs
@@ -117,8 +117,9 @@ decisions, in the order a new reader needs them.
 | Two disks, two system slots | The system disk is EFI, slot A, slot B, and a data partition. Movies and app files go on a different disk. An upgrade refuses to start when the data partition no longer has room for one backup. |
 
 What is in this repository today is the last section on this page. The
-screen, the USB image, and a running computer are not in it yet.
-The memory bootstrap, the approval rules, and the webhook rules are.
+Node Board, the core containers, and a running Friday are not in it yet.
+v0.0.1 is a test installer you can flash. The memory bootstrap, the
+approval rules, and the webhook rules are in the tree.
 
 ## Why it is split this way
 
@@ -234,7 +235,9 @@ Compose network. Friday has no second screen and no host port.
 Open WebUI and LibreChat are not part of the OS. The OpenAI-compatible
 base URL is the model, not the screen. Setup names no vendor. The
 Board image in `compose.yml` is an unpublished placeholder, so the
-screen is not running from this repo yet.
+Node screen is not running from this repo yet. The v0.0.1 image serves
+a text console and a Python page on `127.0.0.1:8080`. That page is not
+this Board.
 A messaging app is a later door. It delivers turns and cannot approve.
 First boot's setup screen is the Board's `/provision` path. It connects
 a cable or Wi-Fi, creates the server on this computer, and takes the
@@ -413,8 +416,12 @@ approval record as an install. Reading and drafting do not.
 
 ## First boot
 
-The first release is one owner, at the machine, with a monitor and a
+The finished first boot is one owner, at the machine, with a monitor and a
 keyboard. A full-screen browser on that screen is the only setup door.
+v0.0.1 has the text console and the local page, and it does not have the
+browser. The steps below are the target. In v0.0.1, "create the server"
+records the confirmation and does not start anything, Wi-Fi is stored and
+not joined, and setup cannot finish because the embed model is absent.
 There is no SSH. The machine mints its id and its secrets before it asks
 anything, and stores them on the data partition.
 
@@ -536,7 +543,7 @@ published host port. Compose publishes only the Board, at
 | Executor container, gateway, `apps` network | Described. Not in the Compose file. The gate does not start a container. |
 | Messaging door, mesh peers, MCP bus, browser session | Described. Not in the Compose file. Off until the owner turns each one on. |
 | Cloudflare tunnel | Described, default off, Board only. No service in Compose. |
-| USB image and installer | Not started. |
+| USB image and installer | v0.0.1 test installer in `image/`, flashed from the GitHub release. See [install.md](install.md). Debian and the installer only. No Friday, Board, Docker, or core containers. Setup cannot finish. |
 
 Build order, and where we are:
 
@@ -544,7 +551,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **We are here.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, and the coordinated backup are in the tree. The USB image is the rest of this step.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, and the coordinated backup are in the tree. v0.0.1 does not boot Friday.
 6. Doors and devices. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve.
 7. MCP, both directions, allowlist by default.
 8. The browser session, behind the same gate.
