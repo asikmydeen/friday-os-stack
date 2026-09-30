@@ -74,7 +74,9 @@ Fill in `.env`:
    throwaway network. `./scripts/prove-memory.sh` calls `memory_save` on a
    throwaway Postgres and indexes one point. `./scripts/prove-isolation.sh`
    checks that an app container on an internal network leaves Postgres
-   closed. None of these scripts call Compose.
+   closed. `./scripts/prove-embed.sh` pulls `nomic-embed-text` into a
+   throwaway Ollama and checks that the memory client receives 768
+   numbers. None of these scripts call Compose.
 2. **Docs and specs** (`docs/*.md`, `catalog/wires/*.yml`) — read and edit
    directly.
 3. **Charters** (`charters/`, `charters/full/`) — plain Markdown with YAML

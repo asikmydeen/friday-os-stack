@@ -176,7 +176,10 @@ not share the person's collection. `family_shared`, `person_*`, and
 same owner rules stay in a JSON file and this SQL is not called.
 `scripts/prove-memory.sh` runs the Postgres path on throwaway
 containers. That proof uses a 768-number stub in place of Ollama.
-v0.0.1 does not contain this service.
+`scripts/prove-embed.sh` pulls `nomic-embed-text` into a throwaway
+Ollama, leaves the Compose project's Ollama volume alone, and
+`memoryd`'s client receives a vector of length 768. v0.0.1 does not
+contain this service or that model.
 
 1. Wait until Qdrant (`/readyz`) and Ollama (`/api/tags`) answer.
 2. Confirm `nomic-embed-text` returns a vector of length 768 before any
