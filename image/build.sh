@@ -7,11 +7,19 @@ OUT="${FRIDAY_IMAGE_OUT:-/tmp/friday-image}"
 mkdir -p "$OUT"
 STATUS="$OUT/build-status"
 LOG="$OUT/build.log"
+PIDFILE="$OUT/build.pid"
+
+if [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then
+  echo "build already running" >&2
+  exit 1
+fi
+echo $$ > "$PIDFILE"
 
 finish() {
   if [ "$(cat "$STATUS" 2>/dev/null || true)" != "DONE" ]; then
     echo FAILED > "$STATUS"
   fi
+  rm -f "$PIDFILE"
 }
 trap finish EXIT
 

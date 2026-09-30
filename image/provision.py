@@ -53,7 +53,11 @@ def handle(store: Store, method: str, path: str, headers, body: bytes, *, local:
         "recover",
     }:
         return _closed(store, route, action)
-    return 200, f"Friday {VERSION} test image. The Board is not in this image.\n" + store.status_text()
+    if "board" in store.omitted:
+        lead = f"Friday {VERSION} test image. The Board is not in this image.\n"
+    else:
+        lead = f"Friday {VERSION}. Setup stays on this page until it is finished.\n"
+    return 200, lead + store.status_text()
 
 
 def _same(left: str, right: str) -> bool:

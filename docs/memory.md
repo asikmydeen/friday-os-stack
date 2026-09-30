@@ -179,7 +179,10 @@ containers. That proof uses a 768-number stub in place of Ollama.
 `scripts/prove-embed.sh` pulls `nomic-embed-text` into a throwaway
 Ollama, leaves the Compose project's Ollama volume alone, and
 `memoryd`'s client receives a vector of length 768. v0.0.1 does not
-contain this service or that model.
+contain this service or that model. A later local image packs both.
+Its QEMU boot started the core, which checks that local embed. That
+compressed file is over the GitHub release limit and is not the
+published download.
 
 1. Wait until Qdrant (`/readyz`) and Ollama (`/api/tags`) answer.
 2. Confirm `nomic-embed-text` returns a vector of length 768 before any

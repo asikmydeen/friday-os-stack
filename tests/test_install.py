@@ -12,6 +12,8 @@ from pathlib import Path
 from image import VERSION
 from image.console import InstallerConsole, SetupConsole
 from image.disks import (
+    BUNDLED,
+    NOT_IN_IMAGE,
     SLOT_FILE,
     commands,
     data_bytes,
@@ -28,6 +30,8 @@ from image.disks import (
 )
 from image.install import apply, write_installed
 from image.main import data_mounted, root_device
+from image.qdrant_bootstrap import plain_env
+from image.starter import start_core
 from image.provision import handle, serve
 from image.scan import scan
 from image.setup import (
@@ -179,6 +183,9 @@ class ConsoleTests(unittest.TestCase):
         banner = console.banner()
         self.assertIn("sdb", banner)
         self.assertIn("installer", banner)
+        self.assertIn("Docker Engine", banner)
+        self.assertIn("nomic-embed-text", banner)
+        self.assertIn("Nothing is downloaded", banner)
         self.assertIn(format_size(DISK), banner)
         self.assertNotIn("under 8 GB", banner)
         low = InstallerConsole(self._disks(), installer_known=True, mem_total_kib=2 * 1024 * 1024)
@@ -208,6 +215,13 @@ class ConsoleTests(unittest.TestCase):
         self.assertIsNone(root_device("overlay / overlay rw 0 0\n"))
         self.assertTrue(data_mounted("/dev/sda4 /var/lib/friday ext4 rw 0 0\n"))
         self.assertFalse(data_mounted("/dev/sda2 / ext4 rw 0 0\n"))
+
+
+class BootstrapEnv(unittest.TestCase):
+    def test_a_quoted_env_file_value_loses_the_quotes(self):
+        self.assertEqual(plain_env('"abc123"'), "abc123")
+        self.assertEqual(plain_env("abc123"), "abc123")
+        self.assertEqual(plain_env("  'abc123'  "), "abc123")
 
 
 class SetupTests(unittest.TestCase):
@@ -247,6 +261,9 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(again.notify_token, notify)
         self.assertEqual(again.memory_token, self.store.memory_token)
         self.assertEqual(again.qdrant_key, self.store.qdrant_key)
+        self.assertEqual(again.webhook_jellyfin, self.store.webhook_jellyfin)
+        self.assertEqual(again.webhook_radarr, self.store.webhook_radarr)
+        self.assertEqual(again.webhook_sonarr, self.store.webhook_sonarr)
 
     def test_an_existing_machine_id_is_kept(self):
         adopted = Store(Path(self.tmp.name) / "adopted")
@@ -264,6 +281,8 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(root.stat().st_mode & 0o777, 0o700)
         self.assertEqual((root / "secrets").stat().st_mode & 0o777, 0o700)
         self.assertEqual((root / "secrets" / "board_password").stat().st_mode & 0o777, 0o600)
+        self.assertEqual((root / "secrets" / "postgres_password").stat().st_mode & 0o777, 0o600)
+        self.assertEqual((root / "secrets" / "approval_token").stat().st_mode & 0o777, 0o600)
         self.assertEqual((root / "provision.token").stat().st_mode & 0o777, 0o600)
 
     def test_status_shows_the_board_password_and_hides_the_other_secrets(self):
@@ -276,6 +295,11 @@ class SetupTests(unittest.TestCase):
         self.assertNotIn(self.store.qdrant_key, text)
         self.assertNotIn("sk-test-key-9f3a", text)
         self.assertNotIn("wpx-9k2m-not-shown", text)
+        self.assertNotIn(self.store.postgres_password, text)
+        self.assertNotIn(self.store.approval_token, text)
+        self.assertNotIn(self.store.webhook_jellyfin, text)
+        self.assertNotIn(self.store.webhook_radarr, text)
+        self.assertNotIn(self.store.webhook_sonarr, text)
         self.assertIn("House", text)
         self.assertIn("does not join Wi-Fi", text)
         self.assertIn("Friday does not speak", text)
@@ -455,6 +479,11 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn(password, body)
         self.assertIn("Friday does not speak", body)
+        status, body = handle(
+            self.store, "GET", "/", self._headers(board=password), b"", local=True
+        )
+        self.assertEqual(status, 200)
+        self.assertIn("The Board is not in this image.", body)
         body_bytes = urllib.parse.urlencode({"action": "install", "confirmed": "true"}).encode()
         status, body = handle(
             self.store, "POST", "/provision", self._headers(token=token), body_bytes, local=True
@@ -514,6 +543,121 @@ class SetupTests(unittest.TestCase):
         self.assertIn("Nothing was started", recorded)
         self.assertFalse(self.store.started)
 
+    def test_create_server_starts_the_bundled_core_without_downloading(self):
+        calls = []
+        loaded = {"ok": False}
+
+        def run(argv):
+            calls.append(list(argv))
+            if argv[:3] == ["docker", "image", "inspect"] and not loaded["ok"]:
+                raise OSError("missing")
+            if argv[:2] == ["docker", "load"]:
+                loaded["ok"] = True
+
+        root = Path(self.tmp.name) / "image-root"
+        models = (
+            root
+            / "usr/lib/friday/ollama-models/models/manifests/registry.ollama.ai/library/nomic-embed-text"
+        )
+        models.mkdir(parents=True)
+        (models / "latest").write_text("{}\n")
+        (root / "usr/lib/friday/images").mkdir(parents=True)
+        (root / "usr/lib/friday/images/core-images.tar").write_bytes(b"tar")
+        (root / "usr/lib/friday/qdrant_bootstrap.py").write_text("print('ok')\n")
+        (root / "usr/lib/friday/compose.yml").write_text("name: friday\n")
+        self.store.omitted = list(NOT_IN_IMAGE)
+        self.store.starter = lambda store: start_core(
+            store, run, root, embed_check=lambda: None
+        )
+        outcome = self.store.confirm_server()
+        self.assertEqual(outcome.reason, "started")
+        self.assertTrue(self.store.started)
+        self.assertFalse(self.store.downloaded)
+        text = self.store.status_text()
+        self.assertIn("The core on this computer was started", text)
+        self.assertIn("Nothing was downloaded", text)
+        self.assertNotIn("Nothing was started", text)
+        self.assertNotIn(self.store.postgres_password, text)
+        env = (self.store.root / "core.env").read_text()
+        self.assertIn(self.store.postgres_password, env)
+        self.assertIn(self.store.webhook_jellyfin, env)
+        self.assertNotIn(self.store.webhook_jellyfin, text)
+        self.assertEqual((self.store.root / "core.env").stat().st_mode & 0o777, 0o600)
+        self.assertNotIn(self.store.postgres_password, (self.store.root / "start.log").read_text())
+        up = next(argv for argv in calls if "up" in argv)
+        self.assertEqual(up[up.index("-p") + 1], "friday")
+        self.assertIn("--pull", up)
+        self.assertIn("never", up)
+        self.assertNotIn("friday-os-stack", up)
+        self.assertTrue(loaded["ok"])
+        self.assertTrue(
+            (
+                self.store.root
+                / "ollama/models/manifests/registry.ollama.ai/library/nomic-embed-text/latest"
+            ).is_file()
+        )
+
+    def test_a_start_error_does_not_claim_the_core_is_up(self):
+        self.store.omitted = []
+
+        def bad(_store):
+            raise OSError("boom")
+
+        self.store.starter = bad
+        outcome = self.store.confirm_server()
+        self.assertEqual(outcome.reason, "start_failed")
+        self.assertFalse(self.store.started)
+        self.assertFalse(self.store.downloaded)
+        self.assertIn("The core did not start", self.store.status_text())
+        self.assertIn("Nothing was downloaded", self.store.status_text())
+
+    def test_a_present_core_without_a_starter_does_not_pretend_to_start(self):
+        self.store.omitted = list(NOT_IN_IMAGE)
+        outcome = self.store.confirm_server()
+        self.assertEqual(outcome.reason, "start_not_wired")
+        self.assertFalse(self.store.started)
+        self.assertFalse(self.store.downloaded)
+        self.assertIn("Nothing was started", self.store.status_text())
+
+    def test_omitted_file_lists_only_what_this_tree_does_not_ship(self):
+        lines = [
+            line
+            for line in Path("image/assets/friday-omitted").read_text().splitlines()
+            if line
+        ]
+        self.assertEqual(lines, list(NOT_IN_IMAGE))
+        self.assertFalse(set(lines) & set(BUNDLED))
+        compose = Path("image/assets/core-compose.yml").read_text()
+        board = Path("image/assets/compose.board.yml").read_text()
+        self.assertNotIn("build:", compose)
+        # BIND_HOST 0.0.0.0 is the address inside the container. A published
+        # host address stays on loopback.
+        for line in compose.splitlines() + board.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("- ") or stripped.startswith("ports:"):
+                self.assertNotIn("0.0.0.0", line)
+        self.assertIn("BIND_HOST: 0.0.0.0", compose)
+        self.assertIn("127.0.0.1:11434:11434", compose)
+        self.assertEqual(compose.count("pull_policy: never"), 9)
+        self.assertIn("networks: [core]\n", compose)
+        self.assertIn("networks: [apps]\n", compose)
+        self.assertIn("internal: true", compose)
+        self.assertEqual(compose.count("ports:"), 1)
+        self.assertNotIn("8090:8090", compose)
+        self.assertNotIn("127.0.0.1:8080", compose)
+        self.assertIn("friday-os-stack/webhooks:0.1.0-amd64", compose)
+        self.assertIn("friday-os-stack/gateway:0.1.0-amd64", compose)
+        friday = compose.split("  friday:", 1)[1].split("  board:", 1)[0]
+        self.assertIn("networks: [core]", friday)
+        self.assertNotIn("apps", friday)
+        kiosk = Path("image/assets/friday-kiosk.service").read_text()
+        self.assertIn("ConditionPathExists=/dev/dri/card0", kiosk)
+        self.assertIn("http://127.0.0.1:8080", kiosk)
+        self.assertIn("/usr/bin/cage", kiosk)
+        self.assertIn("/usr/bin/chromium", kiosk)
+        self.assertIn("127.0.0.1:8080:8080", board)
+        self.assertNotIn("0.0.0.0", board)
+
 
 class PageTests(unittest.TestCase):
     def test_localhost_page(self):
@@ -551,7 +695,7 @@ class PageTests(unittest.TestCase):
                 self.assertIn(password, body)
                 status, body = fetch("/", {"Friday-Board": password})
                 self.assertEqual(status, 200)
-                self.assertIn("The Board is not in this image.", body)
+                self.assertIn("Setup stays on this page until it is finished.", body)
                 status, body = fetch(
                     "/provision",
                     {"Friday-Provision": token},
@@ -614,6 +758,12 @@ class ScanTests(unittest.TestCase):
             outside.write_text("AKIASECRET")
             (root / "etc/link").symlink_to(outside)
             self.assertNotIn("secret-content", scan(root))
+            layer = root / "var/lib/docker/overlay2/abc"
+            layer.mkdir(parents=True)
+            (layer / "note").write_text("POSTGRES_PASSWORD=from-an-image-layer\n")
+            self.assertNotIn("secret-content", scan(root))
+            (layer / "id_ed25519").write_text("secret\n")
+            self.assertIn("secret-file", scan(root))
 
 
 if __name__ == "__main__":

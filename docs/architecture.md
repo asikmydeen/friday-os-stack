@@ -3,7 +3,14 @@
 **Status: draft. This describes the target design, not a built system.**
 `image/` is the v0.0.1 test installer, and [install.md](install.md) is
 how to flash it. That image does not contain Friday, the Board, the
-memory service, Qdrant, Postgres, Ollama, or Docker.
+memory service, Qdrant, Postgres, Ollama, or Docker. The image build in
+this tree packs Docker Engine and that core, and it refuses to finish
+if the payload is missing. It also packs the webhook receiver, the
+gateway, a catalog snapshot, a display kiosk, and Wi-Fi join. A QEMU
+boot of that image printed “The core on this computer was started.
+Nothing was downloaded.” The serial log did not say those five pieces
+were omitted. The compressed file is over the GitHub release limit, so
+v0.0.1 remains the published download.
 
 The customer-facing picture of the same target, including what this
 repository implements today, is [system.md](system.md).
@@ -12,7 +19,7 @@ repository implements today, is [system.md](system.md).
 
 | Layer | Rule |
 |---|---|
-| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `friday/`, `board/`, `memoryd/`, and `executor/` are those processes. Compose builds them. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. `webhooks/` and `sql/webhooks.sql` store an app event and keep its body out of the prompt. Compose has no webhooks container. With `POSTGRES_HOST` set, `memoryd/` calls `memory_save` and indexes Qdrant. Without that host, notes stay in a file. The executor does not start a container. |
+| **Core** | Always installed, small RAM footprint, cannot be removed. Friday, the Board, memory, the executor, and the task journal. `friday/`, `board/`, `memoryd/`, and `executor/` are those processes. Compose builds them. `scripts/bootstrap-memory.sh` creates the memory collections. `gate/` and `sql/approvals.sql` are the approval rules. `webhooks/` stores an app event in memory and keeps its body out of the prompt. `sql/webhooks.sql` is the table definition. `image/assets/core-compose.yml` starts that receiver on the internal apps network and publishes no host port. The dev `compose.yml` does not. With `POSTGRES_HOST` set, `memoryd/` calls `memory_save` and indexes Qdrant. Without that host, notes stay in a file. The executor does not start a container. |
 | **Agent reach** | Part of the product, off until the owner turns each piece on. The messaging door, the mesh, MCP in both directions, and the browser session. None of these is a catalog app, and none of them can mint an approval. |
 | **Optional apps** | Guests, not the front of the product. A menu rendered from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/apps) (community and stable trains only), plus Mattermost, Taskrunner, and a Cloudflare tunnel. An id installs only when it is on the allowlist, has a wire, and has passed a render test. Nothing in this layer starts until the owner approves that exact operation. |
 
@@ -156,8 +163,11 @@ the Postgres network can open it. A container attached to both
 networks can open it. That second attachment is the executor's
 position. The app network is internal because, on the Docker that ran
 this proof, a second ordinary bridge still forwarded the address.
-Compose has the executor service on `core` only. It has no `apps`
-network, no `browser` network, and no gateway. The approval gate
+`image/assets/core-compose.yml` puts the executor and the gateway on
+`core` and on an internal `apps` network, and the webhook receiver on
+`apps` only. Friday stays on `core`. No host port is published for the
+gateway or the webhook receiver. There is no `browser` network. The
+dev `compose.yml` still has the executor on `core` only. The approval gate
 refuses a host network and a mount that resolves outside the app
 disk, including through a symlink. v0.0.1 does not contain these
 networks.
@@ -175,8 +185,10 @@ the header `Friday-Webhook`. `webhooks/receiver.py` and
 `sql/webhooks.sql` store one typed event and keep the raw body out of
 the prompt. Friday announces a grab, a failure, a health change, or any
 other event with one fixed sentence. The receiver does not call the
-executor and does not write an approval. Compose has no webhooks
-container and no `apps` network. `app_can_open("friday", 8080)` returns
+executor and does not write an approval. The dev `compose.yml` has no
+webhooks container and no `apps` network. The image that booted starts
+both on the internal apps network and publishes no host port.
+`app_can_open("friday", 8080)` returns
 `core_closed`. `scripts/prove-isolation.sh` is the packet check for
 Postgres.
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=Friday Board kiosk
+ConditionPathExists=/dev/dri/card0
+After=friday-setup.service
+Wants=friday-setup.service
+
+[Service]
+User=kiosk
+SupplementaryGroups=video render input
+Environment=XDG_RUNTIME_DIR=/run/friday-kiosk
+RuntimeDirectory=friday-kiosk
+ExecStart=/usr/bin/cage -- /usr/bin/chromium --kiosk --no-first-run --disable-sync --disable-translate --noerrdialogs --ozone-platform=wayland http://127.0.0.1:8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

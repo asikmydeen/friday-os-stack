@@ -32,8 +32,9 @@ Apps come from a pinned snapshot of [`truenas/apps`](https://github.com/truenas/
 (LGPL-3.0, community and stable trains only — enterprise stays off), recorded
 in `catalog/PIN`. This is a Compose-based catalog **rendering**, never a fork
 of the TrueNAS middleware or web UI, and the upstream tree is never copied
-into this repo's git history. Seeing a name on the Discover page is not
-permission to install it.
+into this repo's git history. The image copy leaves out a file whose text
+matches the image secret scan, and the scan still reads the snapshot that
+remains. Seeing a name on the Discover page is not permission to install it.
 
 The pinned catalog is a menu of guests, not the front of the product.
 An id installs only when it has a wire, has
@@ -103,7 +104,7 @@ that route. Two apps on the same route that share one secret are
 refused, and nothing is stored. Any method other than POST is refused.
 A body larger than 256 KiB is refused, and nothing is stored.
 
-A matching post stores one typed event in `sql/webhooks.sql`. The type
+A matching post stores one typed event in memory for the life of the process. `sql/webhooks.sql` is the table definition. The type
 comes from a fixed list of event names. A Servarr `Grab` is a grab. A
 health change is health. `DownloadFailed`, `GrabFailed`, and
 `ManualInteractionRequired` are failures. A Servarr import (`Download`)
@@ -121,8 +122,9 @@ the same app returns the same row and is not announced again. The row
 has no approval id. The receiver does not call the executor and does
 not write an approval.
 
-Compose has no webhooks service and no `apps` network yet. The receiver
-is not bound to a host port. Port 8080 on the host is the Board.
+The image compose starts the receiver on an internal `apps` network and
+publishes no host port. The dev `compose.yml` has neither. The process
+does not open Postgres. Port 8080 on the host is the Board.
 
 ## Shared library volume (media bundle)
 

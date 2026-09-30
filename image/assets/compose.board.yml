@@ -1,0 +1,5 @@
+# Applied after setup releases 127.0.0.1:8080. The Board stays on loopback.
+services:
+  board:
+    ports:
+      - "127.0.0.1:8080:8080"

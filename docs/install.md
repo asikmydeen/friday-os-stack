@@ -4,6 +4,8 @@ v0.0.1 is a disk image you can boot. It is the installer, not the finished appli
 
 Download it from the [v0.0.1 release](https://github.com/asikmydeen/friday-os-stack/releases/tag/v0.0.1). The image is not a file in the git tree.
 
+The source tree's image build packs Docker Engine, Friday, the Board, the memory service, Qdrant, Postgres, Ollama, and `nomic-embed-text`, and it refuses to finish without that payload. It also packs the webhook receiver, the gateway, a catalog snapshot, a display kiosk, and Wi-Fi join. v0.0.1, the file on the release page, does not contain them. A later local image was booted under QEMU. Its serial log printed “The core on this computer was started. Nothing was downloaded.” and did not say the webhook receiver, the gateway, the catalog snapshot, the kiosk, or Wi-Fi join were omitted. That compressed file is over the GitHub release limit, so it is not on the release page.
+
 ## What you are flashing
 
 The tested machine is one x86_64 computer that boots UEFI, with at least 8 GB of RAM and an internal disk of at least 64 GB. Secure Boot has to be off. This GRUB is not signed by Microsoft, so a machine with Secure Boot left on will not boot the stick. Legacy BIOS and CSM are not targets. An Apple Silicon Mac does not boot this image natively.

@@ -116,10 +116,15 @@ decisions, in the order a new reader needs them.
 | Later doors cannot become root | The phone opens the Board. A messaging app delivers turns. MCP runs in both directions, and unlisted tools stay out of the prompt. A site with no MCP uses a disposable browser session that cannot see the password or the card. Apps sit on their own network. |
 | Two disks, two system slots | The system disk is EFI, slot A, slot B, and a data partition. Movies and app files go on a different disk. An upgrade refuses to start when the data partition no longer has room for one backup. |
 
-What is in this repository today is the last section on this page. The
-Node Board, the core containers, and a running Friday are not in it yet.
-v0.0.1 is a test installer you can flash. The memory bootstrap, the
-approval rules, and the webhook rules are in the tree.
+What is in this repository today is the last section on this page.
+v0.0.1 is a test installer you can flash. It does not boot the core.
+A later local image was booted under QEMU, and its serial log printed
+“The core on this computer was started. Nothing was downloaded.” That
+log did not say the webhook receiver, the gateway, the catalog
+snapshot, the kiosk, or Wi-Fi join were omitted. The compressed file
+is over the GitHub release limit, so v0.0.1 remains the download. The
+memory bootstrap, the approval rules, and the webhook rules are in the
+tree.
 
 ## Why it is split this way
 
@@ -520,7 +525,8 @@ approval is offered, and the install is refused when the declared
 memory does not fit.
 
 Three Docker networks keep the pieces apart in the target. Only `core`
-exists in `compose.yml` today. `core` carries Friday, the Board,
+exists in the dev `compose.yml`. `image/assets/core-compose.yml` also
+has an internal `apps` network. `core` carries Friday, the Board,
 Qdrant, Postgres, the embed model, the memory service, and the
 executor's control port. `apps` carries optional apps, a webhook
 receiver, and the gateway. The browser session sits on its own network,
@@ -532,9 +538,10 @@ The app cannot resolve the Postgres name and cannot open port 5432. A
 container on the Postgres network can. A container attached to both
 networks can. The app side is internal because, on the Docker that ran
 the proof, a second ordinary bridge still forwarded the address.
-`webhooks/receiver.py` and `sql/webhooks.sql` store a
-typed event and do not call the executor. Compose has no webhooks
-service. A mesh peer reaches the Board and the MCP listener
+`webhooks/receiver.py` stores a typed event in memory and does not call
+the executor. `sql/webhooks.sql` is the table definition. The image
+compose starts the receiver on `apps` and publishes no host port. The
+dev `compose.yml` does not. A mesh peer reaches the Board and the MCP listener
 through an authenticated front. It does not join `core`. Friday has no
 published host port. Compose publishes only the Board, at
 `127.0.0.1:8080`.
@@ -549,19 +556,19 @@ published host port. Compose publishes only the Board, at
 | Compose file | Qdrant, Ollama, and Postgres are upstream images. Friday, the Board, memory-mcp, and the executor build from this tree as local tags. They are not in a registry and they are not in the v0.0.1 image. Compose publishes the Board at `127.0.0.1:8080` and publishes no port for Friday. Empty tokens make the four processes exit. |
 | App wires | Drafts. `catalog/discover.py` reads the `id:` lines and does not install them. The pin is empty, so Discover lists nothing. No renderer reads the wires. |
 | Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
-| Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. `sql/webhooks.sql` stores one typed event. Friday may say one of four fixed sentences. The raw body stays in the log. Compose has no webhooks service and publishes no port for it. |
+| Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. The process keeps one typed event in memory. `sql/webhooks.sql` is the table definition. Friday may say one of four fixed sentences. The raw body stays in the log. The image compose starts the receiver on the internal apps network and publishes no host port. |
 | Coordinated backup | `backup/` pauses writers, then records Postgres, Qdrant, and SQLite. A live SQLite file is refused. The passphrase stays out of the manifest. Movie files are excluded. A failed upgrade restores that backup before the old system slot boots. Compose has no backup service and this cut does not copy a disk. |
 | Catalog discover and RAM fit | `catalog/discover.py` lists nothing while the pin is empty and refuses every install. `measure/ram.py` decides from supplied numbers. A complete record is `not_a_hardware_measurement`. Two gigabytes is the measurement target. |
-| Network paths | `netpolicy/paths.py` decides which name may open which port. An app may open the webhook receiver. A core name is closed. `scripts/prove-isolation.sh` checks the packet on throwaway networks: an app on an internal network leaves Postgres closed by name and by address. Compose has no `apps` or `browser` network. |
+| Network paths | `netpolicy/paths.py` decides which name may open which port. An app may open the webhook receiver. A core name is closed. `scripts/prove-isolation.sh` checks the packet on throwaway networks: an app on an internal network leaves Postgres closed by name and by address. The image compose has an internal `apps` network. It has no `browser` network. The dev `compose.yml` has neither. |
 | Doors | `doors/reach.py` delivers a turn from the adapter and refuses an approval from that adapter. The mesh opens the Board and the MCP listener. The tunnel decision stays off. Nothing in the module listens. |
 | MCP grants | `mcpbus/grants.py` shows the intersection of granted and offered tools. An inbound mutating call waits for the Board and creates no approval. A catalog wire stays off until the Board accepts it. |
 | Browser session | `browser/session.py` keeps the secret with the broker. The model gets page text. Read and draft proceed. Send, pay, delete, and publish wait. |
 | Catalog guests | `guests/lifecycle.py` keeps install closed, including the movies and TV bundle. Adopt records `adopted` and starts nothing here. Disconnect leaves the external app running. A managed uninstall keeps the files. Home Assistant is a separate entry. |
 | Signed updates | `updates/signed.py` refuses an empty signature and refuses a signature it cannot check. Nothing is applied. The code profile stays off without a Coder URL, and a supplied token still leaves taskrunner unstarted. |
-| Executor, gateway, `apps` network | `executor/` records approvals and tasks and does not start a container. The executor service is on `core` only. `scripts/prove-isolation.sh` shows a container on both throwaway networks can open Postgres, and an app on the internal network cannot. Compose has no gateway and no `apps` network. |
+| Executor, gateway, `apps` network | `executor/` records approvals and tasks and does not start a container. The image compose puts the executor and the gateway on `core` and `apps`. The gateway forwards a wire health URL and refuses every other call. `scripts/prove-isolation.sh` shows a container on both throwaway networks can open Postgres, and an app on the internal network cannot. The dev `compose.yml` has no gateway and no `apps` network. |
 | Cloudflare tunnel | `doors/reach.py` keeps the decision off, Board only, and only after an access check if it is ever enabled. No service in Compose. |
 | Helm | `deploy/helm/` has a note and no chart. It waits until the Compose core is proven. |
-| USB image and installer | v0.0.1 test installer in `image/`, flashed from the GitHub release. See [install.md](install.md). Debian and the installer only. No Friday, Board, Docker, or core containers. Setup cannot finish. |
+| USB image and installer | v0.0.1 test installer in `image/`, flashed from the GitHub release. See [install.md](install.md). Debian and the installer only. No Friday, Board, Docker, or core containers. Setup cannot finish. A later local image packs that core plus the webhook receiver, the gateway, a catalog snapshot, a display kiosk, and Wi-Fi join. Its QEMU boot printed “The core on this computer was started. Nothing was downloaded.” and did not omit those five pieces. The compressed file is over the GitHub release limit and is not the published download. |
 
 Build order, and where we are:
 
@@ -569,7 +576,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. `scripts/prove-isolation.sh` is the packet check on throwaway networks. `scripts/prove-embed.sh` pulls `nomic-embed-text` into a throwaway Ollama and receives 768 numbers. A pinned catalog list, a measurement of the running core, those checks inside the image, the embed model in the image, a detached signature, and two physical machines are still ahead.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **The test installer is published. This step is not finished.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, the coordinated backup, the empty-pin discover decision, the supplied-number RAM decision, and the path decision are in the tree. Friday, the Board, the memory service, and the executor build from this tree. v0.0.1 does not boot them. A later local image was booted under QEMU. Its serial log printed “The core on this computer was started. Nothing was downloaded.” and did not say the webhook receiver, the gateway, the catalog snapshot, the kiosk, or Wi-Fi join were omitted. That start uses the embed weights packed in the image. The compressed file is over the GitHub release limit and is not published. `scripts/prove-isolation.sh` is the packet check on throwaway networks. `scripts/prove-embed.sh` pulls `nomic-embed-text` into a throwaway Ollama and receives 768 numbers. A measurement of the running core, a detached signature, and two physical machines are still ahead.
 6. Doors and devices. `doors/reach.py` is the first cut. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve. The tunnel stays off. Nothing listens.
 7. MCP, both directions, allowlist by default. `mcpbus/grants.py` is the first cut.
 8. The browser session, behind the same gate. `browser/session.py` is the first cut.

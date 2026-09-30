@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import http.client
 import json
+import threading
 import unittest
+import urllib.error
+import urllib.request
 
 from webhooks.receiver import HEADER, SENTENCES, MemoryStore, receive, speak
+from webhooks.server import serve
 
 SECRET = {
     "jellyfin": "jellyfin-secret",
@@ -149,6 +154,63 @@ class Queue(unittest.TestCase):
         decision = post(store, "arr", "radarr", {"eventType": "Grab"})
         self.assertFalse(hasattr(decision, "approval_id"))
         self.assertNotIn("approval_id", store.events[decision.event_id])
+
+
+class Server(unittest.TestCase):
+    def test_the_response_is_the_sentence_and_not_the_body(self):
+        store = MemoryStore()
+        secrets = {"jellyfin": "", "radarr": "radarr-secret", "sonarr": ""}
+        httpd = serve(store, secrets, "127.0.0.1", 0)
+        thread = threading.Thread(target=httpd.serve_forever)
+        thread.start()
+        port = httpd.server_address[1]
+        raw = json.dumps({"eventType": "Grab", "movie": {"title": INJECTION}}).encode()
+
+        def fetch(path, data=None, headers=None):
+            request = urllib.request.Request(
+                f"http://127.0.0.1:{port}{path}",
+                data=data,
+                headers=headers or {},
+                method="POST" if data is not None else "GET",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=5) as response:
+                    return response.status, response.read().decode()
+            except urllib.error.HTTPError as exc:
+                try:
+                    return exc.code, exc.read().decode()
+                finally:
+                    exc.close()
+
+        try:
+            status, body = fetch("/health")
+            self.assertEqual(status, 200)
+            self.assertIn("ok", body)
+            status, body = fetch(
+                "/arr",
+                raw,
+                {"Content-Type": "application/json", HEADER: "radarr-secret"},
+            )
+            self.assertEqual(status, 200)
+            self.assertIn("A download was grabbed.", body)
+            self.assertNotIn(INJECTION, body)
+            status, body = fetch("/arr", raw, {HEADER: "nope"})
+            self.assertEqual(status, 403)
+            self.assertNotIn(INJECTION, body)
+            connection = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+            connection.putrequest("POST", "/arr")
+            connection.putheader(HEADER, "radarr-secret")
+            connection.putheader("Content-Length", "999999")
+            connection.endheaders()
+            oversized = connection.getresponse()
+            self.assertEqual(oversized.status, 413)
+            oversized.read()
+            connection.close()
+            self.assertEqual(len(store.events), 1)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(timeout=5)
 
 
 if __name__ == "__main__":

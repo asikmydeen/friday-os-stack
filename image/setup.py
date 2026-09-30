@@ -18,10 +18,21 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from image import VERSION
-from image.disks import CORE_IMAGES
+from image.disks import BUNDLED
+from image.starter import CODES
 
 ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"
-SECRET_FILES = ("board_password", "notify_token", "memory_token", "qdrant_key")
+SECRET_FILES = (
+    "board_password",
+    "notify_token",
+    "memory_token",
+    "qdrant_key",
+    "postgres_password",
+    "approval_token",
+    "webhook_jellyfin",
+    "webhook_radarr",
+    "webhook_sonarr",
+)
 MAX_KEY = 4096
 
 
@@ -190,6 +201,8 @@ class Store:
         self.notify_token = ""
         self.memory_token = ""
         self.qdrant_key = ""
+        self.postgres_password = ""
+        self.approval_token = ""
         self.provision_token = ""
         self.machine_id = ""
         self.provision_state = "open"
@@ -205,14 +218,21 @@ class Store:
         self.model_ok = False
         self.embed_ok = False
         self.password_confirmed = False
+        self.webhook_jellyfin = ""
+        self.webhook_radarr = ""
+        self.webhook_sonarr = ""
         self.wifi_ssid = ""
         self.wifi_password = ""
+        self.wifi_joined = False
+        self.joiner = None
         self.omitted: list[str] = []
         self.ifaces: list[Iface] = []
         self.transport = None
         self.embed_transport = None
         self.resolve = None
         self.zone_exists = lambda _name: True
+        self.starter = None
+        self.handoff = None
         self.started = False
         self.downloaded = False
 
@@ -258,6 +278,7 @@ class Store:
         self.password_confirmed = self._read("password_confirmed") == "yes"
         self.wifi_ssid = self._read("wifi_ssid")
         self.wifi_password = self._read_secret("wifi_psk")
+        self.wifi_joined = self._read("wifi_joined") == "yes"
         data = self._read("machine-id")
         chosen, stored = reconcile_machine_id(etc_machine_id, data, rng.token_hex(16))
         self.machine_id = chosen
@@ -277,21 +298,46 @@ class Store:
             return Outcome("refused", "wifi_missing")
         self.wifi_ssid = ssid
         self.wifi_password = password
+        self.wifi_joined = False
         self._text("wifi_ssid", ssid)
+        self._text("wifi_joined", "no")
         self._secret("wifi_psk", password)
-        return Outcome("ok", "wifi_stored")
+        if self.joiner is None:
+            return Outcome("ok", "wifi_stored")
+        try:
+            self.joiner(ssid, password)
+        except OSError as exc:
+            reason = str(exc) if str(exc) in {"wifi_no_device", "wifi_join_failed", "wifi_missing"} else "wifi_join_failed"
+            return Outcome("refused", reason)
+        self.wifi_joined = True
+        self._text("wifi_joined", "yes")
+        return Outcome("ok", "wifi_joined")
 
     def confirm_server(self) -> Outcome:
-        missing = [name for name in CORE_IMAGES if name in self.omitted]
+        missing = [name for name in BUNDLED if name in self.omitted]
         self.server_confirmed = True
         self.started = False
         self.downloaded = False
-        self.server_note = "core_not_in_image" if missing else "recorded"
         self._text("server_confirmed", "yes")
-        self._text("server_note", self.server_note)
         if missing:
+            self.server_note = "core_not_in_image"
+            self._text("server_note", self.server_note)
             return Outcome("recorded", "core_not_in_image")
-        return Outcome("recorded", "recorded")
+        if self.starter is None:
+            self.server_note = "start_not_wired"
+            self._text("server_note", self.server_note)
+            return Outcome("recorded", "start_not_wired")
+        try:
+            self.starter(self)
+        except OSError as exc:
+            reason = str(exc) if str(exc) in CODES else "start_failed"
+            self.server_note = reason
+            self._text("server_note", self.server_note)
+            return Outcome("refused", reason)
+        self.started = True
+        self.server_note = "started"
+        self._text("server_note", self.server_note)
+        return Outcome("ok", "started")
 
     def set_name(self, name: str) -> Outcome:
         if not valid_name(name):
@@ -392,6 +438,8 @@ class Store:
         token = self.root / "provision.token"
         if token.exists():
             token.unlink()
+        if self.handoff is not None:
+            self.handoff()
         return Outcome("complete", "ok")
 
     def recover(self, new_password: str, *, local_console: bool) -> Outcome:
@@ -420,26 +468,41 @@ class Store:
         lines.append(f"Link: {link}")
         if self.wifi_ssid:
             lines.append(f"Wi-Fi: password stored for {self.wifi_ssid}")
-            lines.append("This test image does not join Wi-Fi. A wired link is the one it can use.")
+            if self.wifi_joined:
+                lines.append(f"Wi-Fi: joined {self.wifi_ssid}")
+            elif self.joiner is None:
+                lines.append("This test image does not join Wi-Fi. A wired link is the one it can use.")
+            else:
+                lines.append("Wi-Fi was not joined. A wired link is the one it can use.")
         lines.append("Server: confirmed" if self.server_confirmed else "Server: not confirmed")
         if self.server_confirmed:
-            lines.append(
-                "Creating the server was recorded. Nothing was started and nothing was downloaded."
-            )
+            if self.started or self.server_note == "started":
+                lines.append("The core on this computer was started. Nothing was downloaded.")
+            elif self.server_note in CODES:
+                lines.append("The core did not start. Nothing was downloaded.")
+            else:
+                lines.append(
+                    "Creating the server was recorded. Nothing was started and nothing was downloaded."
+                )
+            if self.server_note and not self.started:
+                lines.append(f"Detail: {self.server_note}")
         lines.append(f"Name: {self.owner_name or 'not set'}")
         lines.append(f"Timezone: {self.timezone or 'not set'}")
         lines.append("Model: reply received" if self.model_ok else "Model: not checked")
         if self.embed_ok:
             lines.append("Embed: 768")
-        else:
+        elif "nomic-embed-text" in self.omitted or "ollama" in self.omitted:
             lines.append("Embed: not in this image")
+        else:
+            lines.append("Embed: not checked")
         lines.append("Password: confirmed" if self.password_confirmed else "Password: not confirmed")
         lines.append(f"Provision: {self.provision_state}")
         lines.append("")
         if self.omitted:
-            lines.append("This test image does not contain: " + ", ".join(self.omitted))
+            lines.append("This image does not contain: " + ", ".join(self.omitted))
         lines.append("Catalog install is refused.")
-        lines.append("Friday does not speak in this image.")
+        if "friday" in self.omitted or "nomic-embed-text" in self.omitted:
+            lines.append("Friday does not speak in this image.")
         return "\n".join(lines) + "\n"
 
     def _secret(self, name: str, value: str) -> None:

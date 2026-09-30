@@ -7,6 +7,7 @@ import select
 import socket
 import subprocess
 import threading
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -16,6 +17,8 @@ from image.disks import Disk, parent_disk
 from image.install import apply, write_installed
 from image.provision import serve
 from image.setup import Store, SystemRng, read_ifaces
+from image.starter import CODES, publish_board, start_core
+from image.wifi import join_wifi
 
 DATA = Path("/var/lib/friday")
 SYS_BLOCK = Path("/sys/block")
@@ -79,13 +82,59 @@ def run_installed() -> None:
     store.load_or_mint(SystemRng(), _etc_machine_id())
     if OMITTED.is_file():
         store.omitted = [line for line in OMITTED.read_text().splitlines() if line]
+    store.starter = start_core
+    store.joiner = _join_wifi
+    if store.wifi_ssid and store.wifi_password:
+        try:
+            store.joiner(store.wifi_ssid, store.wifi_password)
+        except OSError:
+            store.wifi_joined = False
+            store._text("wifi_joined", "no")
+        else:
+            store.wifi_joined = True
+            store._text("wifi_joined", "yes")
     _persist_machine_id(store.machine_id)
+    if store.server_note == "started":
+        try:
+            start_core(store)
+            store.started = True
+        except OSError as exc:
+            store.started = False
+            store.server_note = str(exc) if str(exc) in CODES else "start_failed"
+            store._text("server_note", store.server_note)
+            _write("The core did not start.\n")
+    if store.provision_state == "complete":
+        _publish(store)
+        console = SetupConsole(store)
+        _write(console.banner())
+        for line in _lines():
+            _write(console.line(line))
+        return
     httpd = serve(store, 8080)
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
+
+    def handoff() -> None:
+        def go() -> None:
+            time.sleep(0.4)
+            httpd.shutdown()
+            _publish(store)
+
+        threading.Thread(target=go, daemon=True).start()
+
+    store.handoff = handoff
     console = SetupConsole(store)
     _write(console.banner())
     for line in _lines():
         _write(console.line(line))
+
+
+def _publish(store: Store) -> None:
+    try:
+        publish_board(store)
+    except OSError:
+        _write("The Board did not take the screen.\n")
+    else:
+        _write("The Board is on 127.0.0.1:8080.\n")
 
 
 def live_disks() -> tuple[list[Disk], bool]:
@@ -212,6 +261,10 @@ def _persist_machine_id(machine_id: str) -> None:
     current = path.read_text().strip() if path.is_file() else ""
     if machine_id and current != machine_id:
         path.write_text(machine_id + "\n")
+
+
+def _join_wifi(ssid: str, password: str) -> None:
+    join_wifi(ssid, password, sysfs=Path("/sys/class/net"), iwd_dir=DATA / "iwd", run=_run)
 
 
 def _run(cmd: list[str]) -> None:

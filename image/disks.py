@@ -30,7 +30,12 @@ B_END_MIB = A_END_MIB + SLOT_MIB
 # ext4 labels use. The EFI filesystem is mounted by its GPT partition name.
 FAT_LABEL = "FRIDAYEFI"
 
-CORE_IMAGES = (
+# Present in the image. Creating the server starts these and does not download them.
+# catalog-snapshot, browser-kiosk, and wifi-join are in the image too. They are
+# a file tree, a host unit, and a joiner, so a missing container name does not
+# describe them and their absence is not what blocks this list.
+BUNDLED = (
+    "docker",
     "friday",
     "board",
     "memory-mcp",
@@ -42,6 +47,7 @@ CORE_IMAGES = (
     "webhooks",
     "gateway",
 )
+NOT_IN_IMAGE = ()
 
 
 @dataclass(frozen=True)

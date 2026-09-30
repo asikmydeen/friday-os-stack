@@ -33,6 +33,12 @@ SECRET_NAMES = {
     "authorized_keys",
 }
 MAX_TEXT = 2_000_000
+# Container layers and model bytes are not the installer's own config.
+# A private-key filename in either place is still a finding.
+SKIP_CONTENT = (
+    ("var", "lib", "docker"),
+    ("usr", "lib", "friday", "ollama-models"),
+)
 
 
 def scan(root: Path, *, expect_role: str = "installer") -> list[str]:
@@ -80,12 +86,19 @@ def scan(root: Path, *, expect_role: str = "installer") -> list[str]:
             continue
         if not stat.S_ISREG(info.st_mode) or info.st_size > MAX_TEXT:
             continue
-        blob = path.read_bytes()
-        if b"\0" in blob[:4096]:
+        if any(relative[: len(prefix)] == prefix for prefix in SKIP_CONTENT):
             continue
-        if ACCESS_KEY.search(blob) or any(pattern in blob for pattern in CONTENT):
+        blob = path.read_bytes()
+        if has_secret_text(blob):
             findings.append("secret-content")
     return sorted(set(findings))
+
+
+def has_secret_text(blob: bytes) -> bool:
+    """True when text contains a secret pattern. A NUL in the first 4 KiB is binary."""
+    if b"\0" in blob[:4096]:
+        return False
+    return bool(ACCESS_KEY.search(blob) or any(pattern in blob for pattern in CONTENT))
 
 
 def walk_files(root: Path):
