@@ -71,7 +71,7 @@ after the agent path exists, are one media player and Home Assistant.
 | Piece | Role | Footprint |
 |---|---|---|
 | Friday | The only mouth. No host port. The Board calls it on the compose network. Reads memory through the memory service, plus core health and the app registry. | One process |
-| Board | The only host page, published at `127.0.0.1:8080`. This project ships that page. It is not Open WebUI, LibreChat, or another packaged chat product. Discover, health, grants, and the ask box. Login is the Board password. The OpenAI-compatible URL is the model, not this screen. | One small Node process |
+| Board | The screen of the OS, drawn at `127.0.0.1:8080`. Discover, health, grants, and the ask box. Login is the Board password. The OpenAI-compatible URL is the model. Open WebUI and LibreChat are not part of the OS. | One small Node process |
 | Qdrant | Semantic memory, cosine similarity, 768 dimensions, vectors on disk | Small while collections are empty |
 | Ollama (`nomic-embed-text` only) | Turns a sentence into a vector. Chat itself never runs a local model. | The largest core piece on disk |
 | memory-mcp + Postgres | The durable `memories` row, id shared with the Qdrant point. Holds the Qdrant key and applies the owner filter. Friday does not. | One small database |
@@ -79,13 +79,14 @@ after the agent path exists, are one media player and Home Assistant.
 | App executor | A process separate from the chat process. Accepts a named operation only when an approval record matches it exactly — never a raw shell string or an arbitrary Compose file. | One small container, no model and no page fetcher |
 | Task journal | Goals that outlive a turn, and the machine operations above. Same crash rule: resume the journal, never mint a second approval. | Rows next to the operation journal |
 
-First boot is this Board, on a monitor attached to the machine. The page
-opens before a network link exists. The owner connects a cable or joins
-Wi-Fi, then creates the server: the page starts the core that shipped in
-the image, and this computer is that server. Nothing in the core is
-downloaded, and the Board stays at `127.0.0.1:8080`. After the model key
-returns a real reply and the embed check passes, Friday speaks first on
-that same page and asks what to set up. The character and the Cabinet
+First boot is this Board, the screen of the OS, on a monitor attached
+to the machine. The screen opens before a network link exists. The
+owner connects a cable or joins Wi-Fi, then creates the server: the
+screen starts the core that shipped in the image, and this computer is
+that server. Nothing in the core is downloaded, and the Board stays at
+`127.0.0.1:8080`. After the model key returns a real reply and the
+embed check passes, Friday speaks first on that same screen and asks
+what to set up. The character and the Cabinet
 roles are already in the image. The owner's notes start empty. A step
 that sends, pays, deletes, publishes, installs, or changes the machine
 waits for the owner on that page.

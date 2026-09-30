@@ -2,11 +2,11 @@
 
 **Status: experimental scaffolding. No release image exists yet. Do not run `bootstrap.sh` expecting a working appliance.**
 
-Friday is a local do-it-all agent. One always-on computer in the house runs it. You reach it from your phone and from a chat app, and from the Board on the machine. It remembers on that computer. It calls the other AI harnesses you run, and they can call it, through MCP, with each tool granted by you. A site with no MCP is used through a browser session on the same computer. Work continues after you close the chat, and Friday comes back when it needs a decision. It cannot send, pay, delete, publish, or change the machine until you approve that exact action.
+Friday is the operating system for one always-on computer in the house. The release is a disk image. You reach it from your phone and from a chat app, and from the Board on the machine. It remembers on that computer. It calls the other AI harnesses you run, and they can call it, through MCP, with each tool granted by you. A site with no MCP is used through a browser session on the same computer. Work continues after you close the chat, and Friday comes back when it needs a decision. It cannot send, pay, delete, publish, or change the machine until you approve that exact action.
 
-Meta Muse and Grok Bot are the hosted products in this category. Each gives the agent a computer, keeps working after the chat closes, and asks before mail, money, or a machine change goes out. Those computers sit in the vendor's cloud. This one sits in the house. The chat model is a plug: any OpenAI-compatible endpoint. Friday is the computer, the memory, and the gate.
+Meta Muse and Grok Bot are the hosted products in this category. Each gives the agent a computer, keeps working after the chat closes, and asks before mail, money, or a machine change goes out. Those computers sit in the vendor's cloud. This one sits in the house, and Friday is the operating system on it. The chat model is a plug: any OpenAI-compatible endpoint. Friday is the computer, the memory, and the gate.
 
-On first boot the owner uses a monitor on that computer. The page connects a cable or Wi-Fi, creates the server on this computer, and takes the model key. Friday then asks, on the Board, what to set up. That page is not built yet.
+On first boot the owner uses a monitor on that computer. The screen connects a cable or Wi-Fi, creates the server on this computer, and takes the model key. Friday then asks, on the Board, what to set up. That screen is not built yet.
 
 A media library, Home Assistant, and the rest of the app catalog can be added later. They are guests. They are not the front of the product.
 
@@ -17,6 +17,7 @@ repository implements today, see [docs/system.md](docs/system.md).
 
 ## What this is not (yet)
 
+- Not an app you install on another operating system. The release is a disk image.
 - Not a bootable USB image.
 - Not a tested installer.
 - Not a hosted agent account, and not a chat window in front of someone else's computer.
@@ -66,7 +67,7 @@ friday-os-stack/
 | Piece | Role |
 |---|---|
 | Friday | The only voice. Chat, Cabinet roles, and tasks. No host port. Reaches memory only through the memory service |
-| Board | The only host page, at `127.0.0.1:8080`. This project ships that page. It is not a packaged chat product. Ask, health, grants, and the screen where an approval is made. A phone on the mesh opens this same page. Friday has no page |
+| Board | The screen of the OS, at `127.0.0.1:8080`. Ask, health, grants, and the place where an approval is made. A phone on the mesh opens this same screen. Friday has no second screen and no host port |
 | Task journal | A goal that outlives the turn. Send, pay, delete, publish, and any machine change wait for an approval chat cannot create |
 | Qdrant | Semantic memory, cosine, 768 dimensions |
 | Ollama (`nomic-embed-text`) | Turns a sentence into a vector. Chat itself does not run a local model |

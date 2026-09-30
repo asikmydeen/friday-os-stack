@@ -5,12 +5,17 @@ ship it yet.** There is no USB image and no installer. The pictures and
 the sections below are the target. The last section says what the files
 in this repo implement today.
 
-Friday is a local do-it-all agent. The hosted products in this category
-are Meta Muse and Grok Bot: the agent lives on a computer, keeps working
-after the chat closes, uses the services the person has connected, and
-stops for a person before mail, money, or a machine change goes out.
-Those products keep that computer in the vendor's cloud. Friday keeps it
-in the house.
+Friday is the operating system. The release is a disk image for one
+computer in the house. You install that image, and the computer runs
+Friday. It is not an app you add to another system. Debian and Docker
+are how the image is built.
+
+The hosted products in this category are Meta Muse and Grok Bot: the
+agent lives on a computer, keeps working after the chat closes, uses
+the services the person has connected, and stops for a person before
+mail, money, or a machine change goes out. Those products keep that
+computer in the vendor's cloud. Friday keeps the computer, and the
+operating system, in the house.
 
 One assistant, Friday, talks to the owner. A few specialist roles (the
 Cabinet) share that same voice and can carry a task, not only a turn.
@@ -53,10 +58,12 @@ You need it when three ordinary things are true at once.
   most 8 notes, already trimmed, and only notes that belong to you.
   The database, the disk, and a shell are not sent with the question.
 
-The page for all of that is one we build, called the Board. It is not
-Open WebUI, LibreChat, or another packaged chat product. The model is
-a plug: any OpenAI-compatible endpoint you already have. The screen is
-ours. Setup does not name a vendor.
+The Board is the screen of this operating system. A browser on the
+machine draws it at `127.0.0.1:8080`. That address is how the screen is
+shown on the box. It is not a website, and it is not a chat app beside
+the OS. Open WebUI and LibreChat are not part of Friday. The model is
+a plug: any OpenAI-compatible endpoint you already have. Setup does
+not name a vendor.
 
 ![A person at the machine, connecting a cable, with the screen on](images/connect.jpg)
 
@@ -99,8 +106,8 @@ decisions, in the order a new reader needs them.
 
 | Decision | What it means |
 |---|---|
-| One computer in the house | Friday is the agent. The model is an OpenAI-compatible plug you supply. Embeddings stay local: `nomic-embed-text`, 768 dimensions. |
-| One page, which we ship | The Board, a small Node process at `127.0.0.1:8080`. Friday has no page and no host port. Open WebUI and LibreChat are not this screen. |
+| Friday is the OS | The release is a disk image for one computer in the house. Friday is the agent on that computer. The model is an OpenAI-compatible plug you supply. Embeddings stay local: `nomic-embed-text`, 768 dimensions. |
+| The Board is the screen | The OS draws it on a monitor at `127.0.0.1:8080`, as one small Node process. Friday has no second screen and no host port. Open WebUI and LibreChat are not part of the OS. |
 | First boot is on the attached monitor | Connect a cable or Wi-Fi. Create the server from the core already in the image. Then name, timezone, and the model key. Confirm the Board password. No SSH. A power loss does not mint a second set of secrets. |
 | Friday speaks first | The character and the Cabinet roles ship in the image. Your notes start empty. The first message asks what to set up. A goal that should outlive the turn goes into the task journal. |
 | Memory has an owner | Postgres holds the note. Qdrant holds the vector for that same id. A search without an owner is refused. A turn sends at most 8 notes. A delete removes the vector. |
@@ -110,7 +117,7 @@ decisions, in the order a new reader needs them.
 | Two disks, two system slots | The system disk is EFI, slot A, slot B, and a data partition. Movies and app files go on a different disk. An upgrade refuses to start when the data partition no longer has room for one backup. |
 
 What is in this repository today is the last section on this page. The
-Board page, the USB image, and a running appliance are not in it yet.
+screen, the USB image, and a running computer are not in it yet.
 The memory bootstrap, the approval rules, and the webhook rules are.
 
 ## Why it is split this way
@@ -122,7 +129,7 @@ an outage. The split below is the remedy.
 
 | Need | How it is met |
 |---|---|
-| One place to talk | The Board is the page, and this project ships it. Friday is the only voice. Advisors are roles of that process, switched for a turn (`@cto`, "ask my cfo"). Installing an app does not create another person to talk to. |
+| One place to talk | The Board is the screen of the OS. Friday is the only voice. Advisors are roles of that process, switched for a turn (`@cto`, "ask my cfo"). Installing an app does not create another person to talk to. |
 | Answers that remember | Postgres holds the note. Qdrant holds the vector used to find it later. Both carry the same id, and both carry an owner. A turn sends at most 8 of those notes to the chat provider. That pack is the part that leaves the machine. |
 | What the model is shown stays evidence | Tool results and fetched pages can be saved as notes. A webhook is stored as a typed event and announced with a fixed sentence. The raw body is not pasted into the prompt as instructions. |
 | Notes that do not leak between people or roles | A person and a role never share a namespace. A search without an owner filter is refused, including `knowledge` and findings, and including while there is only one owner. A second person, and any shared household pool, wait until isolation checks exist. |
@@ -218,16 +225,16 @@ The chat provider is outside the appliance. Friday calls it with the
 question and the recall pack. It never receives the database, the disk,
 or a shell.
 
-## The page you type into
+## The screen of the OS
 
-The page is the Board. This project ships that page: one small Node
-process at `127.0.0.1:8080`. It calls Friday at `http://friday:8080` on
-the Compose network. Friday has no page of its own.
+The Board is that screen. One small Node process draws it at
+`127.0.0.1:8080` and calls Friday at `http://friday:8080` on the
+Compose network. Friday has no second screen and no host port.
 
-Open WebUI, LibreChat, and other packaged chat products are not this
-page. The OpenAI-compatible base URL is the model, not the screen.
-Setup names no vendor. The Board image in `compose.yml` is an
-unpublished placeholder, so the page is not running from this repo yet.
+Open WebUI and LibreChat are not part of the OS. The OpenAI-compatible
+base URL is the model, not the screen. Setup names no vendor. The
+Board image in `compose.yml` is an unpublished placeholder, so the
+screen is not running from this repo yet.
 A messaging app is a later door. It delivers turns and cannot approve.
 First boot's setup screen is the Board's `/provision` path. It connects
 a cable or Wi-Fi, creates the server on this computer, and takes the
@@ -357,7 +364,7 @@ into the journal as instructions.
 
 | Door | What it can do | What it cannot do |
 |---|---|---|
-| Board on the machine, `127.0.0.1:8080` | Ask, see health, accept a grant, approve. This is the page the project ships | It is the only approval screen |
+| Board on the machine, `127.0.0.1:8080` | Ask, see health, accept a grant, approve. This is the screen of the OS | It is the only approval screen |
 | Phone on the mesh | Open that same Board | Skip the Board password. Join the core network |
 | Messaging app | Deliver a turn, and carry "waiting" or "done" back | Create or exchange an approval. Read Postgres |
 | Public tunnel | Reach the Board, only after a verified access check, and only if the owner turns it on | Reach Friday's container, memory, Postgres, or Qdrant |

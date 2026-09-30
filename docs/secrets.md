@@ -37,9 +37,8 @@ shows the minted Board password. Every other path on port 8080 returns
 off to make setup work. The page cannot install a catalog app, change a
 grant, or read owner memory.
 
-The page is the one this project ships. Open WebUI, LibreChat, and
-other packaged chat products are not part of setup. It walks through
-these steps:
+The screen is part of the OS. Open WebUI and LibreChat are not part of
+setup. It walks through these steps:
 
 1. Connect a cable, or choose a Wi-Fi network and enter its password.
    The page shows the link. A later boot reuses a saved link.
