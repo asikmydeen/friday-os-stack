@@ -149,6 +149,16 @@ taken inside that same pause, then writers resume. Optional-app data
 (Jellyfin's config, the movie files) is explicitly excluded from this
 manifest — restoring the core never rolls optional apps backward.
 
+`backup/coordinated.py` and `sql/backup.sql` are that pause and the
+manifest. The passphrase is not stored in the manifest. Chat cannot
+start the pause. An upgrade writes the inactive system slot only. If
+that slot's `/ready` fails, the boot attempts run out, or power is
+lost, the pre-upgrade backup is restored before the old slot boots.
+Delivery workers stay paused until a restored pending send has asked
+the provider. A provider that already accepted it is not sent again. A
+provider that cannot say leaves the item for the owner. This cut does
+not copy a disk, and Compose has no backup service.
+
 ## `scripts/bootstrap-memory.sh`
 
 `scripts/bootstrap-memory.sh` performs this sequence. The memory service

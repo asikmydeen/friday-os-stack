@@ -171,7 +171,11 @@ failing to open `friday:8080`.
 - The data partition holds the machine id, secrets, Postgres, Qdrant,
   SQLite, the soul, the executor journal, and free space for one
   pre-upgrade backup. An upgrade refuses to start when that free space is
-  smaller than the live databases.
+  smaller than the live databases. `backup/coordinated.py` pauses
+  writers before the copy, refuses a live SQLite file, and keeps the
+  passphrase out of the manifest. Movie files are excluded. The upgrade
+  writes the inactive slot. A failed `/ready` restores that backup
+  before the old slot boots. Compose has no backup service.
 - App mounts are canonicalized (symlinks included) and must fall under the
   app storage disk the owner names when approving that app. That disk is
   a different device from the data partition. Downloads, video files, and

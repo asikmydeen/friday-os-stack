@@ -97,11 +97,11 @@ This repo is being built up in stages before any release image is produced:
 2. Mattermost as an optional door.
 3. Starter Cabinet charters and an example soul, with no household facts.
 4. This experimental source snapshot.
-5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, and the webhook rules are in this repo.
+5. The gate and the task journal: approval records, recovery, mount checks, the webhook receiver, coordinated backup, and the USB image. Sending, paying, deleting, publishing, and changing the machine all wait on that gate. Catalog install stays refused. The approval rules, the journal, the mount checks, the webhook rules, and the coordinated backup are in this repo.
 6. Doors and devices. The phone opens the Board over the private mesh. One messaging adapter delivers turns and cannot approve. A public tunnel stays off, and if it is enabled later it reaches the Board only.
 7. MCP, both directions, with the allowlist as the default. A catalog wire is one kind of grant.
 8. A browser session on the box for sites with no MCP, behind the same gate.
 9. Optional catalog guests (a media library, Home Assistant), after the agent path works.
 10. Signed updates the owner can see. A Helm chart is only for someone who already runs Kubernetes. It is not how this appliance reaches a phone.
 
-The memory bootstrap, the approval gate's first cut, and the webhook receiver's first cut are in this repo. The coordinated backup and the USB image are still ahead, and so is every step after them.
+The memory bootstrap, the approval gate, the webhook receiver, and the coordinated backup are in this repo. The USB image is still ahead, and so is every step after it.

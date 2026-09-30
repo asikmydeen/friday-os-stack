@@ -532,6 +532,7 @@ published host port. Compose publishes only the Board, at
 | App wires | Drafts only. The catalog pin is empty. No renderer or executor reads them. |
 | Approval gate and task journal | `gate/` decides, and `sql/approvals.sql` stores the record. Chat cannot create or exchange an approval. Catalog install is refused. A journal resume does not mint a second approval. |
 | Webhook receiver | `webhooks/` checks the `Friday-Webhook` header and classifies the post. `sql/webhooks.sql` stores one typed event. Friday may say one of four fixed sentences. The raw body stays in the log. Compose has no webhooks service and publishes no port for it. |
+| Coordinated backup | `backup/` pauses writers, then records Postgres, Qdrant, and SQLite. A live SQLite file is refused. The passphrase stays out of the manifest. Movie files are excluded. A failed upgrade restores that backup before the old system slot boots. Compose has no backup service and this cut does not copy a disk. |
 | Executor container, gateway, `apps` network | Described. Not in the Compose file. The gate does not start a container. |
 | Messaging door, mesh peers, MCP bus, browser session | Described. Not in the Compose file. Off until the owner turns each one on. |
 | Cloudflare tunnel | Described, default off, Board only. No service in Compose. |
@@ -543,7 +544,7 @@ Build order, and where we are:
 2. Mattermost as an optional door. A messaging adapter is the product door. Mattermost is one way to build it, not the product.
 3. Starter charters and an example soul.
 4. This source snapshot.
-5. The gate and the task journal, recovery, appliance checks, and the USB image. **We are here.** Catalog install stays refused. The approval record, the journal resume, and the webhook rules are in the tree. The coordinated backup and the USB image are the rest of this step.
+5. The gate and the task journal, recovery, appliance checks, and the USB image. **We are here.** Catalog install stays refused. The approval record, the journal resume, the webhook rules, and the coordinated backup are in the tree. The USB image is the rest of this step.
 6. Doors and devices. The phone opens the Board over the mesh. One messaging adapter delivers turns and cannot approve.
 7. MCP, both directions, allowlist by default.
 8. The browser session, behind the same gate.
