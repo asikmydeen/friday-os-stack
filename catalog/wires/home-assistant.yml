@@ -1,7 +1,8 @@
-# EXPERIMENTAL — wire draft, not rendered or tested against a real image yet.
+# EXPERIMENTAL — wire draft. guests/home.py records this plan and does not apply it.
+# Not rendered against a real image. Catalog install stays closed.
 # Home Assistant is a separate catalog entry, not part of the media bundle.
-# Installing it enables the Home charter and grants it home_status/home_control
-# only — no other advisor gets these tools.
+# The plan names the Home charter and home_status/home_control for that role
+# only. The token value is not stored. No other advisor gets these tools.
 
 id: home-assistant
 category: home-automation

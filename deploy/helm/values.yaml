@@ -1,0 +1,17 @@
+clusterSupportsReadWriteOncePod: true
+volumes:
+  - name: qdrant
+    size: 10Gi
+    mount: qdrant
+  - name: ollama
+    size: 20Gi
+    mount: ollama
+  - name: postgres
+    size: 10Gi
+    mount: postgres
+  - name: executor
+    size: 1Gi
+    mount: executor
+  - name: friday
+    size: 1Gi
+    mount: friday

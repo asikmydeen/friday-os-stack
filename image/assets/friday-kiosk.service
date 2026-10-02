@@ -8,8 +8,12 @@ Wants=friday-setup.service
 User=kiosk
 SupplementaryGroups=video render input
 Environment=XDG_RUNTIME_DIR=/run/friday-kiosk
+Environment=PYTHONPATH=/usr/lib/friday
+Environment=FRIDAY_UPSTREAM=http://127.0.0.1:8080
+Environment=FRIDAY_CAGE=/usr/bin/cage
+Environment=FRIDAY_CHROMIUM=/usr/bin/chromium
 RuntimeDirectory=friday-kiosk
-ExecStart=/usr/bin/cage -- /usr/bin/chromium --kiosk --no-first-run --disable-sync --disable-translate --noerrdialogs --ozone-platform=wayland http://127.0.0.1:8080
+ExecStart=/usr/bin/python3 -m image.kiosk
 Restart=on-failure
 RestartSec=5
 

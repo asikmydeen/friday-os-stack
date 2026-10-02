@@ -122,8 +122,36 @@ BEGIN
 END;
 $$;
 
+-- Value shapes only. A sentence that merely says "password" or "token" is not a hit.
+-- "password is hunter22" is a hit. "The password is kept outside the machine" is not.
+CREATE OR REPLACE FUNCTION memory_rejects_credential(p_content TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+    RETURN p_content ~ '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+        OR p_content ~ 'eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}'
+        OR p_content ~ '\ysk-[A-Za-z0-9_-]{16,}'
+        OR p_content ~ '\yAIza[0-9A-Za-z_-]{30,}'
+        OR p_content ~ '\ygh[pousr]_[A-Za-z0-9]{30,}'
+        OR p_content ~ '\ygithub_pat_[A-Za-z0-9_]{20,}'
+        OR p_content ~ '\yxox[abpr]-[A-Za-z0-9-]{20,}'
+        OR p_content ~ '\yAKIA[0-9A-Z]{16}\y'
+        OR p_content ~ '\y[0-9]{8,12}:[A-Za-z0-9_-]{25,}\y'
+        OR p_content ~* '\y(password|passwd|passphrase|passcode|pin|secret|token|api[_ -]?key|access[_ -]?key)\y[[:space:]]*[:=][[:space:]]*[^[:space:]]{4,}'
+        OR p_content ~* '\y(password|passwd|passphrase|passcode|pin|secret|token|api[_ -]?key|access[_ -]?key)\y[[:space:]]+is[[:space:]]+([0-9][^[:space:]]{3,}|[^[:space:]][0-9][^[:space:]]{2,}|[^[:space:]]{2}[0-9][^[:space:]]+|[^[:space:]]{3,}[0-9][^[:space:]]*)'
+        OR p_content ~ '\y([0-9][ -]?){13,19}\y'
+        OR p_content ~ '\y[0-9]{3}-[0-9]{2}-[0-9]{4}\y'
+        OR p_content ~ '\y[A-Fa-f0-9]{40,}\y'
+        OR p_content ~ '(^|[^A-Za-z0-9+/])[A-Za-z0-9+/]{48,}={0,2}($|[^A-Za-z0-9+/=])';
+END;
+$$;
+
 -- Upsert path. A second save of the same live identity updates that row
 -- and bumps revision. A different visibility (a promoted copy) is a new row.
+-- A credential-shaped value raises before any row is written.
 CREATE OR REPLACE FUNCTION memory_save(
     p_owner_id TEXT,
     p_owner_kind TEXT,
@@ -141,6 +169,20 @@ AS $$
 DECLARE
     row memories;
 BEGIN
+    IF memory_rejects_credential(p_content)
+       OR memory_rejects_credential(COALESCE(p_title, ''))
+       OR COALESCE(
+            (
+                SELECT bool_or(memory_rejects_credential(tag))
+                FROM unnest(COALESCE(p_tags, '{}'::text[])) AS tag
+            ),
+            false
+          )
+    THEN
+        RAISE EXCEPTION 'credential'
+            USING ERRCODE = '22023';
+    END IF;
+
     INSERT INTO memories (
         owner_id, owner_kind, content, visibility, category,
         title, tags, pinned, promoted_from, promoted_at, index_state

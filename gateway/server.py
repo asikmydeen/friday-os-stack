@@ -15,6 +15,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from gateway.proxy import Allow, allows_from_dir, match
+from runtime.bind import bind_host
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -76,8 +77,12 @@ def serve(allows: tuple[Allow, ...], host: str, port: int, opener=open_upstream)
 
 
 def main() -> None:
-    host = os.environ.get("BIND_HOST", "0.0.0.0")
-    port = int(os.environ.get("PORT", "8090"))
-    wires = Path(os.environ.get("WIRES_DIR", "/wires"))
+    env = dict(os.environ)
+    try:
+        host = bind_host(env)
+    except OSError as exc:
+        raise SystemExit(f"gateway: {exc}") from None
+    port = int(env.get("PORT", "8090"))
+    wires = Path(env.get("WIRES_DIR", "/wires"))
     allows = allows_from_dir(wires) if wires.is_dir() else ()
     serve(allows, host, port).serve_forever()

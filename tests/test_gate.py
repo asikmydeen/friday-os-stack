@@ -6,6 +6,7 @@ import threading
 import unittest
 from datetime import datetime, timedelta, timezone
 
+from executor.server import app as executor_app
 from gate.rules import (
     MemoryStore,
     complete_step,
@@ -464,7 +465,8 @@ class Recovery(unittest.TestCase):
         self.assertEqual(first.reason, "step_recorded")
         self.assertEqual(second.reason, "step_recorded")
         self.assertEqual(operation["steps"], [{"name": "stop", "state": "done"}])
-        self.assertEqual(operation["state"], "applied")
+        self.assertEqual(operation["state"], "running")
+        self.assertNotEqual(operation["state"], "applied")
         self.assertEqual(len(store.approvals), 1)
 
 
@@ -497,6 +499,73 @@ class TaskJournal(unittest.TestCase):
         )
         self.assertEqual(decision.reason, "ready")
         self.assertEqual(store.approvals, {})
+
+    def test_the_board_lists_one_owners_goals_and_leaves_a_secret_out(self):
+        store = MemoryStore()
+        env = {"BOARD_APPROVAL_TOKEN": "approval-secret", "FRIDAY_NOTIFY_TOKEN": "notify-secret"}
+        kept = record_task(
+            store,
+            owner_id=OWNER,
+            role_id="chief",
+            goal="Book Tuesday and tell me when it needs a card",
+            steps=[{"name": "draft"}, {"name": "pay"}],
+        )
+        record_task(
+            store,
+            owner_id="someone-else",
+            role_id="friday",
+            goal="A different owner",
+            steps=[{"name": "draft"}],
+        )
+        record_task(
+            store,
+            owner_id=OWNER,
+            role_id="friday",
+            goal="password is hunter22",
+            steps=[{"name": "send"}],
+        )
+        record_task(
+            store,
+            owner_id=OWNER,
+            role_id="friday",
+            goal="password%20is%20hunter22",
+            steps=[{"name": "send"}],
+        )
+        before = (len(store.tasks), len(store.approvals))
+        headers = {"Friday-Approval": "approval-secret", "Friday-Owner": OWNER}
+        status, body = executor_app(store, env)("GET", "/tasks", headers, {})
+        self.assertEqual(status, 200)
+        self.assertEqual(body["reason"], "tasks")
+        self.assertIs(body["started"], False)
+        self.assertEqual(len(body["tasks"]), 1)
+        shown = body["tasks"][0]
+        self.assertEqual(shown["id"], kept.task_id)
+        self.assertEqual(shown["state"], "waiting")
+        self.assertEqual(shown["role"], "chief")
+        self.assertEqual(shown["goal"], "Book Tuesday and tell me when it needs a card")
+        self.assertEqual(shown["steps"], [
+            {"name": "draft", "state": "pending"},
+            {"name": "pay", "state": "pending"},
+        ])
+        encoded = str(body)
+        self.assertNotIn("hunter22", encoded)
+        self.assertNotIn("someone-else", encoded)
+        self.assertNotIn("A different owner", encoded)
+        self.assertEqual((len(store.tasks), len(store.approvals)), before)
+
+        missing, refused = executor_app(store, env)(
+            "GET", "/tasks", {"Friday-Approval": "approval-secret"}, {}
+        )
+        self.assertEqual((missing, refused["reason"]), (403, "missing_owner"))
+        self.assertEqual(refused["tasks"], [])
+        self.assertIs(refused["started"], False)
+
+        chat, denied = executor_app(store, env)(
+            "GET", "/tasks", {"Friday-Notify": "notify-secret", "Friday-Owner": OWNER}, {}
+        )
+        self.assertEqual((chat, denied["reason"]), (401, "unauthenticated"))
+        self.assertIs(denied["started"], False)
+        self.assertEqual(len(store.tasks), before[0])
 
 
 if __name__ == "__main__":

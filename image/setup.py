@@ -2,8 +2,16 @@
 
 Secrets are written once, mode 0600, under the data directory. A second
 call keeps the same values. Chat stays off until a model reply is
-non-empty and a local embed vector is 768 long. confirmed=true is not
-a field this module stores.
+non-empty and the local embed reply is nomic-embed-text at 768 numbers.
+A core start that returns that reply records it. A check that returns
+nothing leaves the screen on not checked. Notes: empty is recorded
+only when the smoke point was deleted and every collection count was
+zero. A kept count is not called empty. A missed smoke point records
+neither.
+A credential-shaped fast or think name is refused and is not stored.
+Another model id is refused, including when that vector is also 768 long.
+A missing model id is refused. confirmed=true is not a field this module
+stores. The pin is not a caller argument. Changing it is a new image.
 """
 
 from __future__ import annotations
@@ -19,7 +27,9 @@ from urllib.parse import urlsplit
 
 from image import VERSION
 from image.disks import BUNDLED
+from image.mesh import choose_create, choose_join, choose_local
 from image.starter import CODES
+from memoryd.store import credential_shape
 
 ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789"
 SECRET_FILES = (
@@ -32,8 +42,29 @@ SECRET_FILES = (
     "webhook_jellyfin",
     "webhook_radarr",
     "webhook_sonarr",
+    "soul_apply_token",
 )
 MAX_KEY = 4096
+MODEL_NAME_LIMIT = 128
+PINNED_EMBED = "nomic-embed-text"
+_EMBED_TAG = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
+
+
+def accept_model_name(name: object) -> tuple[str, str]:
+    """Return the stripped name and a reason. An empty reason means it can be posted.
+
+    A blank name, a newline, or a name longer than 128 characters is
+    model_missing. A credential-shaped name is credential, and the value
+    is not returned.
+    """
+    if not isinstance(name, str):
+        return "", "model_missing"
+    cleaned = name.strip()
+    if cleaned == "" or "\n" in cleaned or "\r" in cleaned or len(cleaned) > MODEL_NAME_LIMIT:
+        return "", "model_missing"
+    if credential_shape(cleaned):
+        return "", "credential"
+    return cleaned, ""
 
 
 @dataclass(frozen=True)
@@ -182,10 +213,63 @@ def embed_length(body: bytes) -> int:
         data = json.loads(body)
     except json.JSONDecodeError:
         return 0
-    vector = data.get("embedding")
-    if not isinstance(vector, list):
+    if not isinstance(data, dict):
+        return 0
+    vector = _embed_vector(data)
+    if vector is None:
         return 0
     return len(vector)
+
+
+def pinned_model(model: object) -> bool:
+    """True only for nomic-embed-text, or that name plus one tag."""
+    if not isinstance(model, str):
+        return False
+    if model == PINNED_EMBED:
+        return True
+    prefix = PINNED_EMBED + ":"
+    if not model.startswith(prefix):
+        return False
+    return _EMBED_TAG.fullmatch(model[len(prefix) :]) is not None
+
+
+def pinned_embed(body: bytes) -> str:
+    """ok, or why this reply is not the pinned 768-number embed.
+
+    The model id has to be in the body. A 768-long vector from any other
+    id, and a vector with no id, are both refused. This does not call
+    Ollama.
+    """
+    if not isinstance(body, (bytes, bytearray)):
+        return "embed_not_ready"
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return "embed_not_ready"
+    if not isinstance(data, dict):
+        return "embed_not_ready"
+    if not pinned_model(data.get("model")):
+        return "embed_model"
+    vector = _embed_vector(data)
+    if vector is None or len(vector) != 768 or not _embed_numbers(vector):
+        return "embed_dimensions"
+    return "ok"
+
+
+def _embed_vector(data: dict) -> list | None:
+    if "embeddings" in data:
+        embeddings = data.get("embeddings")
+        if isinstance(embeddings, list) and len(embeddings) == 1 and isinstance(embeddings[0], list):
+            return embeddings[0]
+        return None
+    embedding = data.get("embedding")
+    if isinstance(embedding, list):
+        return embedding
+    return None
+
+
+def _embed_numbers(vector: list) -> bool:
+    return all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in vector)
 
 
 def ram_warning(mem_total_kib: int) -> str:
@@ -217,13 +301,21 @@ class Store:
         self.model_key = ""
         self.model_ok = False
         self.embed_ok = False
+        self.notes_state = ""
         self.password_confirmed = False
         self.webhook_jellyfin = ""
         self.webhook_radarr = ""
         self.webhook_sonarr = ""
+        self.soul_apply_token = ""
         self.wifi_ssid = ""
         self.wifi_password = ""
         self.wifi_joined = False
+        self.mesh_mode = ""
+        self.mesh_url = ""
+        self.mesh_port = "8443"
+        self.mesh_auth_key = ""
+        self.mesh_phone_key = ""
+        self.mesh_laptop_key = ""
         self.joiner = None
         self.omitted: list[str] = []
         self.ifaces: list[Iface] = []
@@ -275,10 +367,19 @@ class Store:
         self.model_key = self._read_secret("model_api_key")
         self.model_ok = self._read("model_ok") == "yes"
         self.embed_ok = self._read("embed_ok") == "yes"
+        notes = self._read("notes_state")
+        self.notes_state = notes if notes in {"empty", "kept"} else ""
         self.password_confirmed = self._read("password_confirmed") == "yes"
         self.wifi_ssid = self._read("wifi_ssid")
         self.wifi_password = self._read_secret("wifi_psk")
         self.wifi_joined = self._read("wifi_joined") == "yes"
+        mode = self._read("mesh_mode")
+        self.mesh_mode = mode if mode in {"local", "join", "create"} else ""
+        self.mesh_url = self._read("mesh_url")
+        self.mesh_port = self._read("mesh_port") or "8443"
+        self.mesh_auth_key = self._read_secret("mesh_auth_key")
+        self.mesh_phone_key = self._read_key("phone.key")
+        self.mesh_laptop_key = self._read_key("laptop.key")
         data = self._read("machine-id")
         chosen, stored = reconcile_machine_id(etc_machine_id, data, rng.token_hex(16))
         self.machine_id = chosen
@@ -312,6 +413,43 @@ class Store:
         self.wifi_joined = True
         self._text("wifi_joined", "yes")
         return Outcome("ok", "wifi_joined")
+
+    def set_mesh(self, mode: str, url: str = "", key: str = "") -> Outcome:
+        """Record this computer, an existing mesh, or a mesh created here.
+
+        A finished setup does not take a new choice. A caller-supplied key
+        is stored only for join, and only after the charset check. Create
+        does not keep a key the caller typed.
+        """
+        if self.provision_state == "complete":
+            return Outcome("refused", "still_provisioning")
+        if mode == "local":
+            choice = choose_local()
+        elif mode == "join":
+            choice = choose_join(url, key)
+        elif mode == "create":
+            choice = choose_create(url)
+        else:
+            return Outcome("refused", "mesh_url")
+        if choice.reason:
+            return Outcome("refused", choice.reason)
+        self._apply_mesh(choice)
+        return Outcome("ok", "mesh_set")
+
+    def save_mesh_keys(self, box: str, phone: str, laptop: str) -> None:
+        """Store keys Headscale minted. The box key is not a status line."""
+        if self.mesh_mode != "create":
+            return
+        if not box or not phone or not laptop:
+            return
+        if "\n" in box or "\n" in phone or "\n" in laptop:
+            return
+        self.mesh_auth_key = box
+        self.mesh_phone_key = phone
+        self.mesh_laptop_key = laptop
+        self._secret("mesh_auth_key", box)
+        self._write(self.root / "headscale" / "phone.key", phone, 0o600)
+        self._write(self.root / "headscale" / "laptop.key", laptop, 0o600)
 
     def confirm_server(self) -> Outcome:
         missing = [name for name in BUNDLED if name in self.omitted]
@@ -356,11 +494,21 @@ class Store:
         return Outcome("ok", "timezone_set")
 
     def set_model(self, base: str, fast: str, think: str, key: str) -> Outcome:
-        if not fast or len(key) == 0 or len(key) > MAX_KEY or "\n" in key:
+        if not isinstance(key, str) or len(key) == 0 or len(key) > MAX_KEY or "\n" in key:
             return Outcome("refused", "model_missing")
+        fast_name, reason = accept_model_name(fast)
+        if reason:
+            return Outcome("refused", reason)
+        if not isinstance(think, str):
+            return Outcome("refused", "model_missing")
+        think_name = ""
+        if think.strip() != "":
+            think_name, reason = accept_model_name(think)
+            if reason:
+                return Outcome("refused", reason)
         self.model_base = base.strip()
-        self.model_fast = fast.strip()
-        self.model_think = think.strip()
+        self.model_fast = fast_name
+        self.model_think = think_name
         self.model_key = key
         self.model_ok = False
         self._text("model_base_url", self.model_base)
@@ -397,17 +545,32 @@ class Store:
 
     def check_embed(self) -> Outcome:
         if self.embed_transport is None:
+            self._mark_embed(False)
             return Outcome("refused", "embed_not_in_image")
         try:
             status, body = self.embed_transport()
         except OSError:
+            self._mark_embed(False)
             return Outcome("refused", "embed_not_in_image")
-        if status != 200 or embed_length(body) != 768:
-            reason = "embed_dimensions" if status == 200 else "embed_not_ready"
+        if status != 200:
+            self._mark_embed(False)
+            return Outcome("refused", "embed_not_ready")
+        reason = pinned_embed(body)
+        if reason != "ok":
+            self._mark_embed(False)
             return Outcome("refused", reason)
-        self.embed_ok = True
-        self._text("embed_ok", "yes")
+        self._mark_embed(True)
         return Outcome("ok", "embed_ok")
+
+    def _mark_embed(self, ok: bool) -> None:
+        self.embed_ok = ok
+        self._text("embed_ok", "yes" if ok else "no")
+
+    def mark_notes(self, state: str) -> None:
+        if state not in {"empty", "kept"}:
+            return
+        self.notes_state = state
+        self._text("notes_state", state)
 
     def confirm_password(self, typed: str, again: str) -> Outcome:
         if not typed or not same(typed, again) or not same(typed, self.board_password):
@@ -429,7 +592,7 @@ class Store:
             return Outcome("refused", "model_not_ready")
         if not self.password_confirmed:
             return Outcome("refused", "password_not_confirmed")
-        embed = self.check_embed() if not self.embed_ok else Outcome("ok", "embed_ok")
+        embed = self.check_embed()
         if embed.outcome != "ok":
             return embed
         self.provision_state = "complete"
@@ -464,8 +627,10 @@ class Store:
         lines = [f"Friday {VERSION}", ""]
         if self.provision_state != "complete":
             lines.append(f"Board password: {self.board_password}")
+            lines.append(f"Character apply token: {self.soul_apply_token}")
             lines.append("")
         lines.append(f"Link: {link}")
+        lines.extend(self._mesh_lines())
         if self.wifi_ssid:
             lines.append(f"Wi-Fi: password stored for {self.wifi_ssid}")
             if self.wifi_joined:
@@ -490,11 +655,15 @@ class Store:
         lines.append(f"Timezone: {self.timezone or 'not set'}")
         lines.append("Model: reply received" if self.model_ok else "Model: not checked")
         if self.embed_ok:
-            lines.append("Embed: 768")
+            lines.append("Embed: nomic-embed-text, 768")
         elif "nomic-embed-text" in self.omitted or "ollama" in self.omitted:
             lines.append("Embed: not in this image")
         else:
             lines.append("Embed: not checked")
+        if self.notes_state == "empty":
+            lines.append("Notes: empty")
+        elif self.notes_state == "kept":
+            lines.append("Notes: kept")
         lines.append("Password: confirmed" if self.password_confirmed else "Password: not confirmed")
         lines.append(f"Provision: {self.provision_state}")
         lines.append("")
@@ -504,6 +673,55 @@ class Store:
         if "friday" in self.omitted or "nomic-embed-text" in self.omitted:
             lines.append("Friday does not speak in this image.")
         return "\n".join(lines) + "\n"
+
+    def _mesh_lines(self) -> list[str]:
+        if self.mesh_mode == "join" and self.mesh_url:
+            return [f"Mesh: joining {self.mesh_url}"]
+        if self.mesh_mode == "create" and self.mesh_url:
+            lines = [f"Mesh: this computer. Other devices use {self.mesh_url}"]
+            if self.provision_state != "complete":
+                if self.mesh_phone_key and self.mesh_laptop_key:
+                    lines.append(f"Phone key: {self.mesh_phone_key}")
+                    lines.append(f"Laptop key: {self.mesh_laptop_key}")
+                else:
+                    lines.append("Phone and laptop keys appear after the server starts.")
+            return lines
+        return ["Mesh: this computer only"]
+
+    def _apply_mesh(self, choice) -> None:
+        if choice.mode in {"local", "create"}:
+            self._drop_secret("mesh_auth_key")
+            self.mesh_auth_key = ""
+        if choice.mode != "create":
+            self._drop_key("phone.key")
+            self._drop_key("laptop.key")
+            self.mesh_phone_key = ""
+            self.mesh_laptop_key = ""
+        if choice.mode == "join":
+            self.mesh_auth_key = choice.key
+            self._secret("mesh_auth_key", choice.key)
+        self.mesh_mode = choice.mode
+        self.mesh_url = choice.url
+        self.mesh_port = choice.port
+        self._text("mesh_mode", choice.mode)
+        self._text("mesh_url", choice.url)
+        self._text("mesh_port", choice.port)
+
+    def _drop_secret(self, name: str) -> None:
+        path = self.root / "secrets" / name
+        if path.exists():
+            path.unlink()
+
+    def _read_key(self, name: str) -> str:
+        path = self.root / "headscale" / name
+        if not path.is_file():
+            return ""
+        return path.read_text().strip()
+
+    def _drop_key(self, name: str) -> None:
+        path = self.root / "headscale" / name
+        if path.exists():
+            path.unlink()
 
     def _secret(self, name: str, value: str) -> None:
         path = self.root / "secrets" / name

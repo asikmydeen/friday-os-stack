@@ -9,12 +9,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
 
 PINNED_MODEL = "nomic-embed-text"
+_TAG = re.compile(r"[A-Za-z0-9._-]{1,64}\Z")
 VECTOR_SIZE = 768
 PROBE_TEXT = "bootstrap ok"
 SMOKE_ID = "b0075700-0000-4000-8000-000000000001"
@@ -87,14 +89,87 @@ def require_pinned_model(ollama: str) -> None:
         raise BootstrapError(f"Ollama /api/tags returned {status}")
     names = []
     for model in payload.get("models") or []:
-        name = str(model.get("name") or model.get("model") or "")
-        names.append(name)
-        if name == PINNED_MODEL or name.startswith(PINNED_MODEL + ":"):
+        if not isinstance(model, dict):
+            continue
+        raw = model.get("name")
+        if not isinstance(raw, str) or raw == "":
+            raw = model.get("model")
+        names.append(raw if isinstance(raw, str) else "")
+        if pinned_model(raw):
             return
     raise BootstrapError(
         f"{PINNED_MODEL} is not installed (have: {', '.join(names) or 'none'}). "
         "A different 768-dimension model is refused."
     )
+
+
+def pinned_model(model: object) -> bool:
+    """True only for nomic-embed-text, or that name plus one tag."""
+    if not isinstance(model, str):
+        return False
+    if model == PINNED_MODEL:
+        return True
+    prefix = PINNED_MODEL + ":"
+    if not model.startswith(prefix):
+        return False
+    return _TAG.fullmatch(model[len(prefix) :]) is not None
+
+
+def embed_verdict(payload: object, *, require_model: bool) -> str:
+    """ok, embed_model, embed_dimensions, or embed_not_ready.
+
+    /api/embed must name the pin. The older endpoint may omit the id
+    after the tags list has already required the pin. A reply that names
+    a different model is refused either way, including at 768 numbers.
+    This does not call Ollama.
+    """
+    if not isinstance(payload, dict):
+        return "embed_not_ready"
+    reported = payload.get("model")
+    if reported is None:
+        if require_model:
+            return "embed_model"
+    elif not pinned_model(reported):
+        return "embed_model"
+    vector = _probe_vector(payload)
+    if (
+        vector is None
+        or len(vector) != VECTOR_SIZE
+        or any(isinstance(item, bool) or not isinstance(item, (int, float)) for item in vector)
+    ):
+        return "embed_dimensions"
+    return "ok"
+
+
+def _probe_vector(payload: dict) -> list | None:
+    if "embeddings" in payload:
+        embeddings = payload.get("embeddings")
+        if isinstance(embeddings, list) and len(embeddings) == 1 and isinstance(embeddings[0], list):
+            return embeddings[0]
+        return None
+    embedding = payload.get("embedding")
+    if isinstance(embedding, list):
+        return embedding
+    return None
+
+
+def _accept_probe(payload: object, *, require_model: bool) -> list[float]:
+    verdict = embed_verdict(payload, require_model=require_model)
+    if verdict == "ok":
+        return [float(item) for item in _probe_vector(payload)]
+    if verdict == "embed_model":
+        raise BootstrapError(
+            f"embed model is not {PINNED_MODEL}. "
+            "A different 768-dimension model is refused."
+        )
+    if verdict == "embed_dimensions" and isinstance(payload, dict):
+        vector = _probe_vector(payload)
+        length = len(vector) if isinstance(vector, list) else 0
+        raise BootstrapError(
+            f"probe embedding length is {length}, not {VECTOR_SIZE}. "
+            "Refusing to create or write collections."
+        )
+    raise BootstrapError("embed probe failed (status 200)")
 
 
 def probe_embedding(ollama: str) -> list[float]:
@@ -104,31 +179,20 @@ def probe_embedding(ollama: str) -> list[float]:
         {"model": PINNED_MODEL, "input": PROBE_TEXT},
         {"Content-Type": "application/json"},
     )
-    vector = None
-    if status == 200 and isinstance(payload, dict):
-        embeddings = payload.get("embeddings")
-        if isinstance(embeddings, list) and embeddings and isinstance(embeddings[0], list):
-            vector = embeddings[0]
-        elif isinstance(payload.get("embedding"), list):
-            vector = payload["embedding"]
-    if vector is None:
-        # Older Ollama builds expose /api/embeddings.
-        status, payload = request(
-            "POST",
-            f"{ollama}/api/embeddings",
-            {"model": PINNED_MODEL, "prompt": PROBE_TEXT},
-            {"Content-Type": "application/json"},
-        )
-        if status == 200 and isinstance(payload, dict) and isinstance(payload.get("embedding"), list):
-            vector = payload["embedding"]
-    if vector is None:
-        raise BootstrapError(f"embed probe failed (status {status})")
-    if len(vector) != VECTOR_SIZE:
-        raise BootstrapError(
-            f"probe embedding length is {len(vector)}, not {VECTOR_SIZE}. "
-            "Refusing to create or write collections."
-        )
-    return [float(item) for item in vector]
+    # A 200 from the new endpoint is the answer. A missing model id does
+    # not fall through to the older endpoint.
+    if status == 200:
+        return _accept_probe(payload, require_model=True)
+    # Older Ollama builds expose /api/embeddings and often omit the model id.
+    status, payload = request(
+        "POST",
+        f"{ollama}/api/embeddings",
+        {"model": PINNED_MODEL, "prompt": PROBE_TEXT},
+        {"Content-Type": "application/json"},
+    )
+    if status == 200:
+        return _accept_probe(payload, require_model=False)
+    raise BootstrapError(f"embed probe failed (status {status})")
 
 
 def vector_params(collection: dict) -> tuple[int | None, str | None]:

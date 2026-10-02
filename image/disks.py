@@ -34,6 +34,8 @@ FAT_LABEL = "FRIDAYEFI"
 # catalog-snapshot, browser-kiosk, and wifi-join are in the image too. They are
 # a file tree, a host unit, and a joiner, so a missing container name does not
 # describe them and their absence is not what blocks this list.
+# door, mcp, the browser session, and outbound MCP are packed under profile reach.
+# Creating the server does not start that profile, so they are not in this list.
 BUNDLED = (
     "docker",
     "friday",

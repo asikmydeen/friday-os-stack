@@ -50,6 +50,20 @@ assert_payload_present() {
 load_images() {
   # One copy of the images, in the rootfs graph. The tar stays on the build
   # machine. If dockerd cannot load it, the tar is packed and loaded on first start.
+  # A graph left by an older payload is loaded again when the tar hash changes.
+  local stamp="$ROOT/usr/lib/friday/payload.sha256"
+  local want have used
+  want=$(sha256sum /out/payload/core-images.tar | awk '{print $1}')
+  have=$(cat "$stamp" 2>/dev/null || true)
+  if [ -d "$ROOT/var/lib/docker/overlay2" ] || [ -d "$ROOT/var/lib/docker/image" ]; then
+    used=$(du -s -B1 "$ROOT/var/lib/docker" | awk '{print $1}')
+    echo "docker graph bytes=$used"
+    if [ "$used" -ge 3000000000 ] && [ "$have" = "$want" ]; then
+      echo "payload hash matches the loaded graph"
+      rm -f "$ROOT/usr/lib/friday/images/core-images.tar"
+      return
+    fi
+  fi
   echo "loading core images into the rootfs"
   if ! command -v dockerd >/dev/null 2>&1 || ! command -v docker >/dev/null 2>&1; then
     apt-get update
@@ -76,6 +90,9 @@ load_images() {
   loaded=1
   if [ "$ready" -eq 1 ]; then
     if docker --host=unix:///tmp/friday-build.sock load -i /out/payload/core-images.tar; then
+      docker --host=unix:///tmp/friday-build.sock image prune -f >/dev/null || true
+      mkdir -p "$ROOT/usr/lib/friday"
+      printf '%s\n' "$want" > "$stamp"
       loaded=0
     fi
   else
@@ -218,8 +235,11 @@ if [ ! -s /out/payload/core-images.tar ] || [ ! -d /out/payload/ollama-models/mo
   exit 1
 fi
 if ! grep -q 'friday-os-stack/webhooks:0.1.0-amd64 linux/amd64' /out/payload/pins.txt \
-  || ! grep -q 'friday-os-stack/gateway:0.1.0-amd64 linux/amd64' /out/payload/pins.txt; then
-  echo "payload pins do not include the webhook receiver and the gateway. Run scripts/fetch-core.sh." >&2
+  || ! grep -q 'friday-os-stack/gateway:0.1.0-amd64 linux/amd64' /out/payload/pins.txt \
+  || ! grep -q 'friday-os-stack/door:0.1.0-amd64 linux/amd64' /out/payload/pins.txt \
+  || ! grep -q 'friday-os-stack/mcp:0.1.0-amd64 linux/amd64' /out/payload/pins.txt \
+  || ! grep -q 'friday-os-stack/browser:0.1.0-amd64 linux/amd64' /out/payload/pins.txt; then
+  echo "payload pins do not include the webhook receiver, the gateway, the door, the MCP listener, and the browser session. Run scripts/fetch-core.sh." >&2
   exit 1
 fi
 
@@ -364,7 +384,7 @@ rm -f "$ROOT/usr/sbin/policy-rc.d" "$ROOT/etc/dpkg/dpkg.cfg.d/unsafe-io"
 VERSION=$(python3 -c 'import sys; sys.path.insert(0, "/src"); from image import VERSION; print(VERSION)')
 mkdir -p "$ROOT/usr/lib/friday/image" "$ROOT/etc/systemd/network" "$ROOT/etc/systemd/system" \
   "$ROOT/soul/agents" "$ROOT/soul/agents-full" "$ROOT/usr/share/doc/friday" "$ROOT/boot/grub" "$ROOT/boot/efi"
-for name in __init__.py disks.py install.py setup.py provision.py console.py main.py starter.py qdrant_bootstrap.py wifi.py; do
+for name in __init__.py disks.py install.py setup.py provision.py console.py main.py starter.py mesh.py qdrant_bootstrap.py wifi.py kiosk.py logs.py; do
   cp "/src/image/$name" "$ROOT/usr/lib/friday/image/$name"
 done
 cp /src/image/qdrant_bootstrap.py "$ROOT/usr/lib/friday/qdrant_bootstrap.py"
@@ -372,6 +392,9 @@ cp /src/image/assets/core-compose.yml "$ROOT/usr/lib/friday/compose.yml"
 cp /src/image/assets/compose.board.yml "$ROOT/usr/lib/friday/compose.board.yml"
 mkdir -p "$ROOT/usr/lib/friday/sql" "$ROOT/usr/lib/friday/ollama-models" "$ROOT/var/lib/friday"
 cp /src/sql/memories.sql "$ROOT/usr/lib/friday/sql/memories.sql"
+cp /src/sql/webhooks.sql "$ROOT/usr/lib/friday/sql/webhooks.sql"
+cp /src/sql/backup.sql "$ROOT/usr/lib/friday/sql/backup.sql"
+cp /src/sql/approvals.sql "$ROOT/usr/lib/friday/sql/approvals.sql"
 cp -a /out/payload/ollama-models/. "$ROOT/usr/lib/friday/ollama-models/"
 if [ -f /out/payload/pins.txt ]; then
   cp /out/payload/pins.txt "$ROOT/usr/lib/friday/pins.txt"
@@ -386,8 +409,15 @@ cp /src/image/assets/friday-kiosk.service "$ROOT/etc/systemd/system/friday-kiosk
 rm -rf "$ROOT/usr/lib/friday/wires" "$ROOT/usr/lib/friday/catalog"
 mkdir -p "$ROOT/usr/lib/friday/wires" "$ROOT/usr/lib/friday/catalog"
 cp /src/catalog/wires/*.yml "$ROOT/usr/lib/friday/wires/"
-cp /src/catalog/__init__.py /src/catalog/discover.py /src/catalog/snapshot.py /src/catalog/PIN \
+cp /src/catalog/__init__.py /src/catalog/discover.py /src/catalog/snapshot.py \
+  /src/catalog/allowlist.py /src/catalog/PIN \
   "$ROOT/usr/lib/friday/catalog/"
+rm -rf "$ROOT/usr/lib/friday/helm"
+mkdir -p "$ROOT/usr/lib/friday/helm/templates"
+cp /src/deploy/helm/Chart.yaml /src/deploy/helm/values.yaml /src/deploy/helm/README.md \
+  "$ROOT/usr/lib/friday/helm/"
+cp /src/deploy/helm/templates/workloads.yaml /src/deploy/helm/templates/pvc.yaml \
+  "$ROOT/usr/lib/friday/helm/templates/"
 if [ ! -s /out/payload/catalog-pin ] || [ ! -d /out/payload/catalog-snapshot/ix-dev ]; then
   rm -rf /tmp/truenas-apps /out/payload/catalog-snapshot
   git clone --depth 1 --filter=blob:none --sparse https://github.com/truenas/apps.git /tmp/truenas-apps
@@ -448,6 +478,19 @@ cat > "$ROOT/etc/hosts" <<'EOF'
 EOF
 ln -sfn /usr/share/zoneinfo/UTC "$ROOT/etc/localtime"
 printf 'UTC\n' > "$ROOT/etc/timezone"
+python3 - <<'PY'
+import sys
+from pathlib import Path
+sys.path.insert(0, "/src")
+from image.logs import shipped
+root = Path("/build/rootfs")
+for rel, text in shipped().items():
+    path = root / rel
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+    if path.stat().st_size < 1:
+        raise SystemExit("empty log bound: %s" % rel)
+PY
 rm -f "$ROOT/etc/machine-id" "$ROOT/var/lib/dbus/machine-id"
 : > "$ROOT/etc/machine-id"
 chmod 644 "$ROOT/etc/machine-id"
@@ -469,7 +512,8 @@ Friday ${VERSION} installer.
 This stick installs Debian onto slot A of another disk.
 Docker Engine is in this image. Friday, the Board, the memory service, Qdrant, Postgres, Ollama, nomic-embed-text, the webhook receiver, and the gateway are packed in this image.
 Creating the server on the installed system starts that core on this computer. Nothing is downloaded.
-A catalog snapshot, a display kiosk, and Wi-Fi join are in this image. Catalog install is refused. There is no SSH.
+A catalog snapshot, a display kiosk, and Wi-Fi join are in this image. The Board lists names from that snapshot. Catalog install is refused. There is no SSH.
+Container logs rotate at 10 MiB, three files. The journal is capped at 256 MiB, and at 64 MiB while it is only in memory.
 EOF
 cp "$ROOT/etc/os-release" /out/debian-os-release
 
@@ -568,10 +612,20 @@ chmod 644 "$ROOT/etc/machine-id"
 stage scan
 for required in \
   usr/lib/friday/image/wifi.py \
+  usr/lib/friday/image/kiosk.py \
+  usr/lib/friday/image/logs.py \
+  usr/lib/friday/image/mesh.py \
+  etc/docker/daemon.json \
+  etc/systemd/journald.conf.d/friday.conf \
+  etc/friday-log-ceiling \
   etc/systemd/system/friday-kiosk.service \
   usr/lib/friday/catalog-pin \
   usr/lib/friday/wires/jellyfin.yml \
-  usr/lib/friday/catalog/PIN
+  usr/lib/friday/catalog/PIN \
+  usr/lib/friday/catalog/allowlist.py \
+  usr/lib/friday/helm/Chart.yaml \
+  usr/lib/friday/helm/templates/workloads.yaml \
+  usr/lib/friday/helm/templates/pvc.yaml
 do
   if [ ! -s "$ROOT/$required" ]; then
     echo "missing $required" >&2

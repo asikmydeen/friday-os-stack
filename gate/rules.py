@@ -202,9 +202,11 @@ def complete_step(
                 steps.append(dict(step))
         if not found:
             return Decision("refused", "unknown_step", operation_id=operation_id)
-        state = "applied" if all(step["state"] == "done" for step in steps) else "running"
+        if operation.get("state") == "applied":
+            return Decision("exchanged", "already_applied", operation_id=operation_id)
+        # A claim is not the postcondition. recover() writes applied.
         operation["steps"] = steps
-        operation["state"] = state
+        operation["state"] = "running"
         return Decision("exchanged", "step_recorded", operation_id=operation_id)
 
 
@@ -217,21 +219,13 @@ def record_task(
     steps: list[Mapping],
 ) -> Decision:
     normalized = []
-    waiting = False
     for step in steps:
         name = step["name"]
         state = step.get("state", "pending")
-        if state not in {"pending", "done"}:
+        if state not in {"pending", "running", "done", "blocked"}:
             return Decision("refused", "unknown_step_state")
-        if name in SENSITIVE and state != "done":
-            waiting = True
         normalized.append({"name": name, "state": state})
-    if normalized and all(step["state"] == "done" for step in normalized):
-        task_state = "done"
-    elif waiting:
-        task_state = "waiting"
-    else:
-        task_state = "ready"
+    state_name = task_state(normalized)
     task_id = str(uuid.uuid4())
     with store._lock:
         store.tasks[task_id] = {
@@ -240,9 +234,9 @@ def record_task(
             "role_id": role_id,
             "goal": goal,
             "steps": normalized,
-            "state": task_state,
+            "state": state_name,
         }
-    return Decision("allowed", task_state, task_id=task_id)
+    return Decision("allowed", state_name, task_id=task_id)
 
 
 def resume_task(store: MemoryStore, task_id: str) -> Decision:
@@ -251,17 +245,27 @@ def resume_task(store: MemoryStore, task_id: str) -> Decision:
         if task is None:
             return Decision("refused", "unknown_task")
         # Recompute from the steps already stored. Done steps stay done,
-        # and this path does not insert an approval.
-        waiting = any(
-            step["name"] in SENSITIVE and step["state"] != "done" for step in task["steps"]
-        )
-        if task["steps"] and all(step["state"] == "done" for step in task["steps"]):
-            task["state"] = "done"
-        elif waiting:
-            task["state"] = "waiting"
-        else:
-            task["state"] = "ready"
+        # a running step is not started again, and this path does not
+        # insert an approval.
+        task["state"] = task_state(task["steps"])
         return Decision("allowed", "resumed", task_id=task_id)
+
+
+def _sensitive_name(name: object) -> bool:
+    return isinstance(name, str) and name.strip().casefold() in SENSITIVE
+
+
+def task_state(steps: list) -> str:
+    """ready, running, waiting, done, or blocked. A running step wins over a later wait."""
+    if any(step.get("state") == "blocked" for step in steps):
+        return "blocked"
+    if steps and all(step.get("state") == "done" for step in steps):
+        return "done"
+    if any(step.get("state") == "running" for step in steps):
+        return "running"
+    if any(_sensitive_name(step.get("name")) and step.get("state") != "done" for step in steps):
+        return "waiting"
+    return "ready"
 
 
 def canonicalize(path: str, links: Mapping[str, str] | None = None) -> str:
@@ -492,6 +496,19 @@ def _machine_body(fields: Mapping, links: Mapping[str, str]) -> tuple[dict | Non
         "storage_device": fields["storage_device"],
         "data_device": fields["data_device"],
     }, None
+
+
+def claim_body(
+    kind: str,
+    fields: Mapping,
+    links: Mapping[str, str] | None = None,
+) -> tuple[dict | None, str | None]:
+    """Canonical body for one kind. A bad mount is a reason, not a stored row."""
+    if kind == "life":
+        return _life_body(fields)
+    if kind == "machine":
+        return _machine_body(fields, links or {})
+    return None, "unknown_kind"
 
 
 def _mounts_allowed(mounts: list[str], storage_disk: str) -> str | None:

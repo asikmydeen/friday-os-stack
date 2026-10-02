@@ -26,12 +26,45 @@ live_names() {
   docker ps --format '{{.Names}}' | grep '^friday-os-stack-' | sort || true
 }
 BEFORE="$(live_names)"
+# Hash every file the image Dockerfiles copy, so a later edit is packed.
+SOURCE_STAMP="$(
+  find \
+    "$ROOT/friday" \
+    "$ROOT/board" \
+    "$ROOT/memoryd" \
+    "$ROOT/executor" \
+    "$ROOT/backup" \
+    "$ROOT/catalog" \
+    "$ROOT/sql" \
+    "$ROOT/gate" \
+    "$ROOT/gateway" \
+    "$ROOT/webhooks" \
+    "$ROOT/doors" \
+    "$ROOT/mcpbus" \
+    "$ROOT/browser" \
+    "$ROOT/runtime" \
+    "$ROOT/netpolicy" \
+    "$ROOT/image" \
+    "$ROOT/charters" \
+    "$ROOT/soul" \
+    "$ROOT/deploy/helm" \
+    -type f \
+    ! -name '*.pyc' \
+    ! -path '*/__pycache__/*' \
+    -print0 \
+    | sort -z \
+    | xargs -0 shasum -a 256 \
+    | shasum -a 256 \
+    | awk '{print $1}'
+)"
 
 PY_ID="$(docker image inspect python:3.13-slim --format '{{.Id}}' 2>/dev/null || true)"
 NODE_ID="$(docker image inspect node:24-alpine --format '{{.Id}}' 2>/dev/null || true)"
 PG_ID="$(docker image inspect postgres:16-alpine --format '{{.Id}}' 2>/dev/null || true)"
 QD_ID="$(docker image inspect qdrant/qdrant:latest --format '{{.Id}}' 2>/dev/null || true)"
 OL_ID="$(docker image inspect ollama/ollama:latest --format '{{.Id}}' 2>/dev/null || true)"
+HS_ID="$(docker image inspect headscale/headscale:v0.26.1 --format '{{.Id}}' 2>/dev/null || true)"
+TS_ID="$(docker image inspect tailscale/tailscale:v1.82.5 --format '{{.Id}}' 2>/dev/null || true)"
 
 restore_tags() {
   [ -n "$PY_ID" ] && docker tag "$PY_ID" python:3.13-slim || true
@@ -39,6 +72,8 @@ restore_tags() {
   [ -n "$PG_ID" ] && docker tag "$PG_ID" postgres:16-alpine || true
   [ -n "$QD_ID" ] && docker tag "$QD_ID" qdrant/qdrant:latest || true
   [ -n "$OL_ID" ] && docker tag "$OL_ID" ollama/ollama:latest || true
+  [ -n "$HS_ID" ] && docker tag "$HS_ID" headscale/headscale:v0.26.1 || true
+  [ -n "$TS_ID" ] && docker tag "$TS_ID" tailscale/tailscale:v1.82.5 || true
   docker rm -f friday-image-ollama >/dev/null 2>&1 || true
   docker network rm friday-image-embed >/dev/null 2>&1 || true
 }
@@ -46,7 +81,13 @@ trap 'restore_tags; finish' EXIT
 
 if [ -f "$PAYLOAD/READY" ] && [ -s "$PAYLOAD/core-images.tar" ] && [ -d "$PAYLOAD/ollama-models/models" ] \
   && grep -q 'friday-os-stack/webhooks:0.1.0-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
-  && grep -q 'friday-os-stack/gateway:0.1.0-amd64 linux/amd64' "$PAYLOAD/pins.txt"; then
+  && grep -q 'friday-os-stack/gateway:0.1.0-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
+  && grep -q 'friday-os-stack/door:0.1.0-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
+  && grep -q 'friday-os-stack/mcp:0.1.0-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
+  && grep -q 'friday-os-stack/browser:0.1.0-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
+  && grep -q 'friday-os-stack/headscale:0.26.1-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
+  && grep -q 'friday-os-stack/tailscale:1.82.5-amd64 linux/amd64' "$PAYLOAD/pins.txt" \
+  && [ "$(cat "$PAYLOAD/source-stamp" 2>/dev/null || true)" = "$SOURCE_STAMP" ]; then
   echo "payload already ready"
   echo DONE > "$STATUS"
   exit 0
@@ -63,6 +104,9 @@ docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os
 docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os-stack/executor:0.1.0-amd64 -f executor/Dockerfile .
 docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os-stack/webhooks:0.1.0-amd64 -f webhooks/Dockerfile .
 docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os-stack/gateway:0.1.0-amd64 -f gateway/Dockerfile .
+docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os-stack/door:0.1.0-amd64 -f doors/Dockerfile .
+docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os-stack/mcp:0.1.0-amd64 -f mcpbus/Dockerfile .
+docker build --platform linux/amd64 --provenance=false --sbom=false -t friday-os-stack/browser:0.1.0-amd64 -f browser/Dockerfile .
 
 # A plain pull --platform on this Docker daemon keeps the host-architecture tag.
 # Building FROM the upstream image with an explicit platform produces an amd64 image.
@@ -83,6 +127,8 @@ echo "pinning amd64 third-party images"
 pin_upstream postgres:16-alpine friday-os-stack/postgres:16-amd64 "$PG_ID"
 pin_upstream qdrant/qdrant:latest friday-os-stack/qdrant:pinned-amd64 "$QD_ID"
 pin_upstream ollama/ollama:latest friday-os-stack/ollama:pinned-amd64 "$OL_ID"
+pin_upstream headscale/headscale:v0.26.1 friday-os-stack/headscale:0.26.1-amd64 "$HS_ID"
+pin_upstream tailscale/tailscale:v1.82.5 friday-os-stack/tailscale:1.82.5-amd64 "$TS_ID"
 
 for image in \
   friday-os-stack/friday:0.1.0-amd64 \
@@ -93,7 +139,12 @@ for image in \
   friday-os-stack/qdrant:pinned-amd64 \
   friday-os-stack/ollama:pinned-amd64 \
   friday-os-stack/webhooks:0.1.0-amd64 \
-  friday-os-stack/gateway:0.1.0-amd64
+  friday-os-stack/gateway:0.1.0-amd64 \
+  friday-os-stack/door:0.1.0-amd64 \
+  friday-os-stack/mcp:0.1.0-amd64 \
+  friday-os-stack/browser:0.1.0-amd64 \
+  friday-os-stack/headscale:0.26.1-amd64 \
+  friday-os-stack/tailscale:1.82.5-amd64
 do
   arch="$(docker image inspect "$image" --format '{{.Os}}/{{.Architecture}}')"
   if [ "$arch" != "linux/amd64" ]; then
@@ -152,7 +203,12 @@ docker save -o "$PAYLOAD/core-images.tar" \
   friday-os-stack/qdrant:pinned-amd64 \
   friday-os-stack/ollama:pinned-amd64 \
   friday-os-stack/webhooks:0.1.0-amd64 \
-  friday-os-stack/gateway:0.1.0-amd64
+  friday-os-stack/gateway:0.1.0-amd64 \
+  friday-os-stack/door:0.1.0-amd64 \
+  friday-os-stack/mcp:0.1.0-amd64 \
+  friday-os-stack/browser:0.1.0-amd64 \
+  friday-os-stack/headscale:0.26.1-amd64 \
+  friday-os-stack/tailscale:1.82.5-amd64
 
 AFTER="$(live_names)"
 if [ "$BEFORE" != "$AFTER" ]; then
@@ -167,6 +223,7 @@ fi
   du -sh "$PAYLOAD/ollama-models" "$PAYLOAD/core-images.tar"
 } | tee "$PAYLOAD/sizes.txt"
 
+printf '%s\n' "$SOURCE_STAMP" > "$PAYLOAD/source-stamp"
 : > "$PAYLOAD/READY"
 echo DONE > "$STATUS"
 echo "payload ready"

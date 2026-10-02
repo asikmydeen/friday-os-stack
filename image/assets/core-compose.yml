@@ -35,6 +35,9 @@ services:
     volumes:
       - ${FRIDAY_DATA}/postgres:/var/lib/postgresql/data
       - /usr/lib/friday/sql/memories.sql:/docker-entrypoint-initdb.d/memories.sql:ro
+      - /usr/lib/friday/sql/webhooks.sql:/docker-entrypoint-initdb.d/webhooks.sql:ro
+      - /usr/lib/friday/sql/backup.sql:/docker-entrypoint-initdb.d/backup.sql:ro
+      - /usr/lib/friday/sql/approvals.sql:/docker-entrypoint-initdb.d/approvals.sql:ro
 
   memory-mcp:
     image: friday-os-stack/memory-mcp:0.1.0-amd64
@@ -64,16 +67,24 @@ services:
       BOARD_APPROVAL_TOKEN: ${BOARD_APPROVAL_TOKEN}
       FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
       STORE_PATH: /data/gate.json
-      BIND_HOST: 0.0.0.0
+      # core: the address facing Postgres. The apps address stays closed.
+      BIND_HOST: core
+      CORE_PEER: postgres
       PORT: "8080"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: memories
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - ${FRIDAY_DATA}/executor:/data
+    depends_on: [postgres]
 
   friday:
     image: friday-os-stack/friday:0.1.0-amd64
     pull_policy: never
     restart: unless-stopped
-    networks: [core]
+    networks: [core, doors]
     environment:
       FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
       MEMORY_TOKEN: ${MEMORY_TOKEN}
@@ -84,9 +95,11 @@ services:
       MODEL_FAST: ${MODEL_FAST}
       MODEL_THINK: ${MODEL_THINK}
       OLLAMA_URL: http://ollama:11434
+      WEBHOOK_URL: http://webhooks:8080
+      FRIDAY_STATE: /data/friday.sqlite
       BIND_HOST: 0.0.0.0
       PORT: "8080"
-    depends_on: [memory-mcp, executor, ollama]
+    depends_on: [memory-mcp, executor, ollama, webhooks]
     volumes:
       - ${FRIDAY_DATA}/friday:/data
       - /soul:/soul:ro
@@ -101,23 +114,36 @@ services:
       BOARD_PASSWORD: ${BOARD_PASSWORD}
       FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
       BOARD_APPROVAL_TOKEN: ${BOARD_APPROVAL_TOKEN}
+      SOUL_APPLY_TOKEN: ${SOUL_APPLY_TOKEN}
       FRIDAY_URL: http://friday:8080
       EXECUTOR_URL: http://executor:8080
+      CATALOG_ROOT: /catalog
       BIND_HOST: 0.0.0.0
       PORT: "8080"
+    volumes:
+      - /usr/lib/friday/catalog-snapshot:/catalog:ro
     depends_on: [friday]
 
   webhooks:
     image: friday-os-stack/webhooks:0.1.0-amd64
     pull_policy: never
     restart: unless-stopped
-    networks: [apps]
+    # apps so a guest can post. core so this process can call webhook_store.
+    # It does not proxy. A guest on apps still cannot open Postgres.
+    networks: [apps, core]
     environment:
       BIND_HOST: 0.0.0.0
       PORT: "8080"
       WEBHOOK_SECRET_JELLYFIN: ${WEBHOOK_SECRET_JELLYFIN}
       WEBHOOK_SECRET_RADARR: ${WEBHOOK_SECRET_RADARR}
       WEBHOOK_SECRET_SONARR: ${WEBHOOK_SECRET_SONARR}
+      FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: memories
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on: [postgres]
 
   gateway:
     image: friday-os-stack/gateway:0.1.0-amd64
@@ -125,13 +151,121 @@ services:
     restart: unless-stopped
     networks: [core, apps]
     environment:
-      BIND_HOST: 0.0.0.0
+      # core: the address facing Postgres. The apps address stays closed.
+      BIND_HOST: core
+      CORE_PEER: postgres
       PORT: "8090"
       WIRES_DIR: /wires
     volumes:
       - /usr/lib/friday/wires:/wires:ro
 
+  # Profile reach. Creating the server does not start it. No host port.
+  door:
+    image: friday-os-stack/door:0.1.0-amd64
+    pull_policy: never
+    profiles: [reach]
+    restart: "no"
+    networks: [doors]
+    environment:
+      DOOR_ENABLED: ${DOOR_ENABLED:-no}
+      DOOR_TOKEN: ${DOOR_TOKEN:-}
+      FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
+      FRIDAY_URL: http://friday:8080
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+
+  # Profile reach. Inbound tools wait when the call would change something.
+  mcp:
+    image: friday-os-stack/mcp:0.1.0-amd64
+    pull_policy: never
+    profiles: [reach]
+    restart: "no"
+    networks: [doors]
+    environment:
+      MCP_ENABLED: ${MCP_ENABLED:-no}
+      MCP_TOKEN: ${MCP_TOKEN:-}
+      FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}
+      FRIDAY_URL: http://friday:8080
+      GRANTED_TOOLS: ${GRANTED_TOOLS:-}
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+
+  # Profile reach. One page for a site with no MCP. It does not approve.
+  browser:
+    image: friday-os-stack/browser:0.1.0-amd64
+    pull_policy: never
+    profiles: [reach]
+    restart: "no"
+    networks: [browser]
+    environment:
+      BROWSER_ENABLED: ${BROWSER_ENABLED:-no}
+      BROWSER_TOKEN: ${BROWSER_TOKEN:-}
+      SITE_HOST: ${SITE_HOST:-}
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+
+  # Profile reach. Calls one granted MCP server. It does not approve.
+  outbound:
+    image: friday-os-stack/mcp:0.1.0-amd64
+    command: ["python", "-m", "mcpbus.outbound"]
+    pull_policy: never
+    profiles: [reach]
+    restart: "no"
+    networks: [outbound]
+    environment:
+      OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-no}
+      OUTBOUND_TOKEN: ${OUTBOUND_TOKEN:-}
+      GRANTED_TOOLS: ${GRANTED_TOOLS:-}
+      GRANTED_SERVERS: ${GRANTED_SERVERS:-}
+      BIND_HOST: 0.0.0.0
+      PORT: "8080"
+
+  # Profile mesh. The client on this computer. Quiet until setup chooses join or create.
+  # Host networking so it can serve the Board's local port. It is not on core.
+  tailscale:
+    image: friday-os-stack/tailscale:1.82.5-amd64
+    pull_policy: never
+    profiles: [mesh]
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    restart: unless-stopped
+    environment:
+      TS_AUTHKEY: ${MESH_AUTHKEY}
+      TS_EXTRA_ARGS: ${MESH_EXTRA_ARGS}
+      TS_HOSTNAME: friday
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+    volumes:
+      - ${FRIDAY_DATA}/tailscale:/var/lib/tailscale
+
+  # Profile mesh-server. Headscale on this computer. Quiet unless setup chooses create.
+  # Not on core. Metrics and gRPC stay on localhost inside the container.
+  headscale:
+    image: friday-os-stack/headscale:0.26.1-amd64
+    pull_policy: never
+    profiles: [mesh-server]
+    command: ["serve"]
+    restart: unless-stopped
+    networks: [mesh]
+    ports:
+      - "${MESH_PORT}:${MESH_PORT}"
+    volumes:
+      - ${FRIDAY_DATA}/headscale/config:/etc/headscale:ro
+      - ${FRIDAY_DATA}/headscale/lib:/var/lib/headscale
+    tmpfs:
+      - /var/run/headscale
+
 networks:
   core:
   apps:
     internal: true
+  doors:
+    internal: true
+  browser:
+    internal: true
+  outbound:
+    internal: true
+  mesh:

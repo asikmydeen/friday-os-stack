@@ -8,7 +8,9 @@ under catalog/wires are not the catalog.
 request_install is the product call. It returns catalog_install_closed
 for every id. review_install records the later order a release would
 use, and the last reason in that order is still catalog_install_closed.
-confirmed=true is ignored.
+confirmed=true is ignored. catalog/render.py can record a description
+the caller supplies. That record does not fill this pin and does not
+open install.
 
 This module does not fetch truenas/apps and does not start a container.
 """

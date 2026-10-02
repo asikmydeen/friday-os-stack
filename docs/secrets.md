@@ -54,8 +54,11 @@ password is an exact match, and the page does not contain it.
 
 First boot is a full-screen browser on a monitor attached to the machine.
 There is no SSH. The launcher, not the page, creates a provisioning token
-in a file that only that local user can read. The browser sends it only
-to `http://127.0.0.1:8080/provision`.
+in a file that only that local user can read. The kiosk launcher sends
+it only to `http://127.0.0.1:8080/provision`. It is not a chromium
+argument and not a field on the form. The form posts the cable, Wi-Fi,
+the server, the name, the timezone, the model, and the password
+confirmation. Install stays closed.
 
 That path opens on the local screen before a network link exists. It
 shows the minted Board password. Every other path on port 8080 returns
@@ -73,7 +76,11 @@ setup. It walks through these steps:
    are not downloaded. The Board stays at `127.0.0.1:8080`.
 3. Display name, timezone, and the chat endpoint: an OpenAI-compatible
    base URL, an API key, a fast model, and an optional think model.
-   That endpoint is the model. Setup names no vendor. Chat stays off
+   That endpoint is the model. Friday posts the fast name on an ordinary
+   turn. The think name is posted only when the caller sets think exactly
+   true and that name is set. A missing fast name is refused. A
+   credential-shaped name is refused and is not stored. No model id
+   is baked in. Setup names no vendor. Chat stays off
    until that endpoint returns a real, non-empty reply. The local embed
    check is separate and must return a 768-dimension vector from the
    pinned model.
@@ -111,11 +118,11 @@ volume and referenced by name.
 
 | Secret | Used by |
 |---|---|
-| Messaging-door token | The adapter that delivers turns to Friday. The adapter cannot approve |
-| Mesh pre-auth key | One long-lived peer (phone, laptop). Not reused for an ephemeral code machine |
-| Inbound MCP token | One outside harness calling Friday. Recall stays owner-filtered |
-| Outbound MCP `secret_ref` | Friday calling a granted server. The model receives tool results, not this value |
-| Site credential | The browser session's broker, for that site only. The model does not receive the password or the card |
+| Messaging-door token | The adapter that delivers turns to Friday. The adapter cannot approve. `doors/token.py` records one generated secret and returns the name `DOOR_TOKEN` only. A caller-supplied value is not stored. Chat cannot record one, and that refusal leaves a secret already recorded. A 64-character lowercase hex value is the generated secret. Any other credential-shaped draw is not stored. The value stays in the process. It is not written to a file and it is not placed on the environment. It is not the notify token and it is not the inbound MCP token. Recording it does not start the door and does not create an approval. `doors/server.py` still reads the environment and does not call that record. Friday's ask path does not call it |
+| Mesh pre-auth key | One long-lived peer (phone, laptop). Not reused for an ephemeral code machine. `doors/peers.py` records that key and returns the name only. A caller-supplied value is not stored. Phone and laptop do not share one. The value stays in the process. It is not written to a file and it is not placed on the environment. The module does not call Headscale |
+| Inbound MCP token | One outside harness calling Friday. Recall stays owner-filtered. `mcpbus/token.py` records one generated secret and returns the name `MCP_TOKEN` only. A caller-supplied value is not stored. Chat cannot record one, and that refusal leaves a secret already recorded. A 64-character lowercase hex value is the generated secret. Any other credential-shaped draw is not stored. The value stays in the process. It is not written to a file and it is not placed on the environment. It is not the notify token and it is not the messaging-door token. Recording it does not start the listener and does not create an approval. `mcpbus/server.py` still reads the environment and does not call that record. Friday's ask path does not call it |
+| Outbound MCP `secret_ref` | Friday calling a granted server. The model receives tool results, not this value. `mcpbus/ref.py` records one generated secret and returns the name `MCP_SECRET_REF` only. A caller-supplied value is not stored. Chat cannot record one, and that refusal leaves a secret already recorded. A 64-character lowercase hex value is stored. Any other credential-shaped draw is not stored. The value stays in the process. It is not written to a file and it is not placed on the environment. It is not the notify token, the messaging-door token, or the inbound MCP token. Recording it does not call the server and does not create an approval. `mcpbus/outbound.py` still reads the environment and does not call that record. Friday's ask path does not call it |
+| Site credential | The browser session's broker, for that site only. The model does not receive the password or the card. `browser/broker.py` records one generated secret for one site and returns the name `SITE_CREDENTIAL` only. A caller-supplied value is not stored. Chat cannot record one, and that refusal leaves a secret already recorded. A 64-character lowercase hex value is stored. Any other credential-shaped draw is not stored. The value stays in the process. It is not written to a file and it is not placed on the environment. It is not the notify token, the messaging-door token, or the inbound MCP token. The model is not given the value. A core name, a loopback address, including an abbreviated spelling, and a link-local address are refused. Recording it does not fetch a page, does not start a browser, and does not create an approval. `browser/server.py` still reads the environment and does not call that record. Friday's ask path does not call it |
 
 ## App webhook secret
 
@@ -123,7 +130,15 @@ Registering an app's webhook generates a secret for that app alone. It
 is not one of the four secrets minted at first boot, and it is not
 `FRIDAY_NOTIFY_TOKEN`. The receiver compares the request header
 `Friday-Webhook` with `hmac.compare_digest`. The Board shows the name.
-It does not show the value.
+It does not show the value. `webhooks/secret.py` records that generated
+secret for Jellyfin, Radarr, or Sonarr. The Board is the only actor. A
+caller-supplied value is not stored. Chat cannot record one, and that
+refusal leaves a secret already recorded. Radarr and Sonarr do not
+share a secret. A 64-character hex value is the generated secret. Any
+other credential-shaped draw is not stored. The value stays in the
+process. It is not written to a file and it is not placed on the
+process environment. The module does not post the webhook and does not
+open Postgres. Friday's ask path does not call it.
 
 ## Connections and app secrets
 
@@ -136,6 +151,14 @@ It does not show the value.
 - The Board shows the secret's **name**. It never echoes the value back
   once it has been entered — not on the same screen, not later, not in
   logs.
+- A coding-plan base URL is optional. `updates/plan.py` records one for
+  `claude-code` and returns the name `CODING_PLAN_URL` only. With the
+  URL unset, nothing is stored and the Anthropic key is not read. A
+  caller-supplied key is not stored. `ANTHROPIC_API_KEY` is reserved
+  and no value is kept. The URL stays in the process. It is not
+  written to a file and it is not placed on the environment. Chat
+  cannot record it. Recording it does not call the URL and does not
+  start taskrunner. Friday's ask path does not call it.
 
 ## What must never be committed to this repo
 

@@ -1,7 +1,13 @@
-"""Local setup page. It binds to 127.0.0.1 and does not install or read memory."""
+"""Local setup page. It binds to 127.0.0.1 and does not install or read memory.
+
+A granted /provision request is an HTML form. The form posts back to
+/provision and does not carry the provisioning token. The launcher adds
+that header. Wi-Fi and model secrets are not copied into the page.
+"""
 
 from __future__ import annotations
 
+import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
@@ -86,24 +92,33 @@ def _closed(store: Store, route: str, action: str) -> tuple[int, str]:
 
 def _provision(store: Store, action: str, fields: dict) -> tuple[int, str]:
     if action in {"", "status"}:
-        return 200, store.status_text()
+        return 200, _page(store, "")
     if action == "link":
         store.save_link()
-        return 200, store.status_text()
+        return 200, _page(store, "")
     if action == "wifi":
         outcome = store.save_wifi(fields.get("ssid", ""), fields.get("password", ""))
         if outcome.outcome != "ok":
-            return 200, outcome.reason + "\n" + store.status_text()
-        return 200, store.status_text()
+            return 200, _page(store, outcome.reason)
+        return 200, _page(store, "")
+    if action == "mesh_local":
+        outcome = store.set_mesh("local")
+        return 200, _page(store, outcome.reason)
+    if action == "mesh_join":
+        outcome = store.set_mesh("join", fields.get("url", ""), fields.get("key", ""))
+        return 200, _page(store, outcome.reason)
+    if action == "mesh_create":
+        outcome = store.set_mesh("create", fields.get("url", ""))
+        return 200, _page(store, outcome.reason)
     if action == "server":
         outcome = store.confirm_server()
-        return 200, outcome.reason + "\n" + store.status_text()
+        return 200, _page(store, outcome.reason)
     if action == "name":
         outcome = store.set_name(fields.get("name", ""))
-        return 200, outcome.reason + "\n" + store.status_text()
+        return 200, _page(store, outcome.reason)
     if action == "timezone":
         outcome = store.set_timezone(fields.get("timezone", ""))
-        return 200, outcome.reason + "\n" + store.status_text()
+        return 200, _page(store, outcome.reason)
     if action == "model":
         outcome = store.set_model(
             fields.get("base", ""),
@@ -111,14 +126,94 @@ def _provision(store: Store, action: str, fields: dict) -> tuple[int, str]:
             fields.get("think", ""),
             fields.get("key", ""),
         )
-        return 200, outcome.reason + "\n" + store.status_text()
+        return 200, _page(store, outcome.reason)
     if action == "password":
         outcome = store.confirm_password(fields.get("typed", ""), fields.get("again", ""))
-        return 200, outcome.reason + "\n" + store.status_text()
+        return 200, _page(store, outcome.reason)
     if action == "finish":
         outcome = store.finish()
-        return 200, outcome.reason + "\n" + store.status_text()
-    return 200, "unknown\n" + store.status_text()
+        return 200, _page(store, outcome.reason)
+    return 200, _page(store, "unknown")
+
+
+def _page(store: Store, note: str) -> str:
+    """The monitor form. Secret values are not filled in."""
+    status = html.escape(store.status_text())
+    shown = f"<p>{html.escape(note)}</p>" if note else ""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Friday setup</title>
+</head>
+<body>
+<h1>Friday setup</h1>
+<p>This page is only on this computer. Catalog install stays closed.</p>
+{shown}
+<pre>{status}</pre>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="link">
+<button type="submit">Use the cable</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="wifi">
+<label>Wi-Fi name <input name="ssid" autocomplete="off"></label>
+<label>Wi-Fi password <input name="password" type="password" autocomplete="off"></label>
+<button type="submit">Store Wi-Fi</button>
+</form>
+<h2>Mesh</h2>
+<p>Leave this unset to keep the Board on this computer. That is a complete install. Choose before creating the server. Creating the server again applies a later choice.</p>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="mesh_local">
+<button type="submit">This computer only</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="mesh_join">
+<label>Control URL <input name="url" autocomplete="off"></label>
+<label>Pre-auth key <input name="key" type="password" autocomplete="off"></label>
+<button type="submit">Join an existing mesh</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="mesh_create">
+<label>Control URL for other devices <input name="url" autocomplete="off"></label>
+<button type="submit">Create the mesh on this computer</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="server">
+<button type="submit">Create the server on this computer</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="name">
+<label>Display name <input name="name" autocomplete="off"></label>
+<button type="submit">Save name</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="timezone">
+<label>Timezone <input name="timezone" autocomplete="off"></label>
+<button type="submit">Save timezone</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="model">
+<label>Base URL <input name="base" autocomplete="off"></label>
+<label>Fast model <input name="fast" autocomplete="off"></label>
+<label>Think model <input name="think" autocomplete="off"></label>
+<label>API key <input name="key" type="password" autocomplete="off"></label>
+<button type="submit">Check the model</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="password">
+<label>Board password <input name="typed" type="password" autocomplete="off"></label>
+<label>Again <input name="again" type="password" autocomplete="off"></label>
+<button type="submit">I saved the password</button>
+</form>
+<form method="post" action="/provision" autocomplete="off">
+<input type="hidden" name="action" value="finish">
+<button type="submit">Finish setup</button>
+</form>
+</body>
+</html>
+"""
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -147,7 +242,8 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, payload: str) -> None:
         data = payload.encode()
         self.send_response(status)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        kind = "text/html; charset=utf-8" if payload.startswith("<!DOCTYPE html>") else "text/plain; charset=utf-8"
+        self.send_header("Content-Type", kind)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

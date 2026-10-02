@@ -10,6 +10,7 @@ from backup.coordinated import (
     plan_upgrade,
     ready,
     reconcile,
+    restore_host,
     restore_ledger,
     resume_writers,
     seal_manifest,
@@ -301,6 +302,308 @@ class BackupTests(unittest.TestCase):
         rejected = reconcile(box, "m1", "rejected")
         self.assertEqual(rejected.reason, "owner_asked")
         self.assertFalse(box.ledger[0]["sent_again"])
+
+    def test_a_blank_host_holds_the_pending_delivery_and_returns_the_memory(self):
+        source, _ = _pause()
+        _seal(source)
+        manifest = dict(source.manifest)
+        memory = [
+            {
+                "id": "n1",
+                "owner_id": "owner",
+                "owner_kind": "person",
+                "content": "The password is kept outside the machine",
+            }
+        ]
+        ledger = [
+            {
+                "id": "m1",
+                "status": "pending",
+                "idempotency_key": "delivery-m1",
+                "sent_again": True,
+            },
+            {"id": "m2", "status": "uncertain", "idempotency_key": "delivery-m2"},
+        ]
+        host = Box()
+        out = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=memory,
+            ledger=ledger,
+            points=["note-1"],
+            collections=["friday_profile", "knowledge"],
+            containers_running=True,
+            confirmed=True,
+        )
+        self.assertEqual(out.reason, "blank_host")
+        self.assertEqual(host.memory, memory)
+        self.assertEqual(host.ledger[0]["status"], "pending")
+        self.assertEqual(host.ledger[1]["status"], "uncertain")
+        self.assertEqual(host.ledger[0]["idempotency_key"], "delivery-m1")
+        self.assertFalse(host.ledger[0]["sent_again"])
+        self.assertFalse(host.ledger[1]["sent_again"])
+        self.assertFalse(host.started)
+        self.assertFalse(host.copied)
+        self.assertFalse(host.wiped)
+        self.assertEqual(host.created, ())
+        self.assertEqual(host.points, ("note-1",))
+        self.assertEqual(host.collections, ("friday_profile", "knowledge"))
+        self.assertNotIn("passphrase", host.manifest)
+        self.assertEqual(send(host).reason, "workers_paused")
+        self.assertEqual(mutate(host, "install").reason, "writers_paused")
+        self.assertNotIn("boot_old_slot", host.events)
+        self.assertNotIn("delivery-m1", host.events)
+        manifest["catalog_pin"] = "changed-after"
+        self.assertNotEqual(host.manifest["catalog_pin"], "changed-after")
+
+        asked = reconcile(host, "m1", "unknown")
+        self.assertEqual(asked.reason, "owner_asked")
+        self.assertEqual(host.ledger[0]["status"], "held")
+        self.assertFalse(host.ledger[0]["sent_again"])
+        self.assertEqual(host.ledger[0]["idempotency_key"], "delivery-m1")
+        self.assertEqual(send(host).reason, "workers_paused")
+
+        other = Box()
+        restore_host(
+            other,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=source.manifest,
+            memory=memory,
+            ledger=[{"id": "m1", "status": "pending", "idempotency_key": "delivery-m1"}],
+            confirmed=True,
+        )
+        never = reconcile(other, "m1", "never_accepted")
+        self.assertEqual(never.reason, "owner_asked")
+        self.assertFalse(other.ledger[0]["sent_again"])
+        self.assertEqual(other.ledger[0]["idempotency_key"], "delivery-m1")
+        self.assertEqual(send(other).reason, "workers_paused")
+
+        restarted = restore_host(
+            source,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=source.manifest,
+            memory=memory,
+            ledger=ledger,
+            confirmed=True,
+        )
+        self.assertEqual(restarted.reason, "not_a_blank_host")
+        self.assertNotIn("restore_blank", source.events)
+        self.assertEqual(source.memory, [])
+
+        pinned = dict(source.manifest)
+        pinned["catalog_pin"] = "a" * 40
+        pinned["image_digests"] = ["sha256:" + ("ab" * 32)]
+        pin_host = Box()
+        pin_out = restore_host(
+            pin_host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=pinned,
+            memory=memory,
+            ledger=ledger,
+        )
+        self.assertEqual(pin_out.reason, "blank_host")
+        self.assertEqual(pin_host.manifest["catalog_pin"], "a" * 40)
+        self.assertEqual(pin_host.manifest["image_digests"], ["sha256:" + ("ab" * 32)])
+        self.assertNotIn("a" * 40, pin_host.events)
+
+        pair = Box()
+        restore_host(
+            pair,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=source.manifest,
+            memory=memory,
+            ledger=ledger,
+        )
+        first = reconcile(pair, "m1", "accepted")
+        self.assertEqual(first.reason, "delivered")
+        self.assertEqual(pair.ledger[1]["status"], "uncertain")
+        self.assertFalse(pair.ledger[1]["sent_again"])
+        self.assertEqual(send(pair).reason, "workers_paused")
+        second = reconcile(pair, "m2", "accepted")
+        self.assertEqual(second.reason, "delivered")
+        self.assertEqual(send(pair).outcome, "sent")
+        self.assertNotIn("delivery-m1", pair.events)
+        self.assertNotIn("delivery-m2", pair.events)
+
+    def test_blank_host_refuses_chat_a_credential_and_a_wipe(self):
+        source, _ = _pause()
+        _seal(source)
+        manifest = source.manifest
+        memory = [
+            {
+                "id": "n1",
+                "owner_id": "owner",
+                "owner_kind": "person",
+                "content": "The password is kept outside the machine",
+            }
+        ]
+        ledger = [{"id": "m1", "status": "pending"}]
+        host = Box()
+        chat = restore_host(
+            host,
+            actor="chat",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=memory,
+            ledger=ledger,
+            confirmed=True,
+        )
+        self.assertEqual(chat.reason, "actor_cannot_backup")
+        self.assertEqual(host.events, [])
+        self.assertIsNone(host.manifest)
+
+        unapproved = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=False,
+            manifest=manifest,
+            memory=memory,
+            ledger=ledger,
+            confirmed=True,
+        )
+        self.assertEqual(unapproved.reason, "approval_required")
+        self.assertIsNone(host.manifest)
+
+        wiped = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=memory,
+            ledger=ledger,
+            points=["note-1"],
+            wipe=True,
+        )
+        self.assertEqual(wiped.reason, "points_stay")
+        self.assertEqual(host.points, ())
+        self.assertFalse(host.wiped)
+
+        secret = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=[
+                {
+                    "id": "n1",
+                    "owner_id": "owner",
+                    "owner_kind": "person",
+                    "content": "token=abcd",
+                }
+            ],
+            ledger=ledger,
+        )
+        self.assertEqual(secret.reason, "credential")
+        self.assertEqual(host.memory, [])
+        self.assertIsNone(host.manifest)
+
+        hunter = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=[
+                {
+                    "id": "n1",
+                    "owner_id": "owner",
+                    "owner_kind": "person",
+                    "content": "password is hunter22",
+                }
+            ],
+            ledger=[{"id": "m1", "status": "pending", "idempotency_key": "token=abcd"}],
+        )
+        self.assertEqual(hunter.reason, "credential")
+        self.assertEqual(host.memory, [])
+        self.assertNotIn("hunter22", host.events)
+
+        shaped = dict(manifest)
+        shaped["passphrase"] = "kept-outside"
+        leaked = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=shaped,
+            memory=memory,
+            ledger=ledger,
+        )
+        self.assertEqual(leaked.reason, "passphrase_in_manifest")
+        self.assertIsNone(host.manifest)
+        self.assertNotIn("kept-outside", host.events)
+
+        odd = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory="the notes",
+            ledger=ledger,
+        )
+        self.assertEqual(odd.reason, "missing_memory")
+
+        closed = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=memory,
+            ledger=ledger,
+            collections=["family_shared"],
+        )
+        self.assertEqual(closed.reason, "collection_closed")
+        self.assertEqual(host.collections, ())
+        self.assertEqual(host.created, ())
+
+        newline = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=manifest,
+            memory=[
+                {
+                    "id": "n1",
+                    "owner_id": "owner\n",
+                    "owner_kind": "person",
+                    "content": "The password is kept outside the machine",
+                }
+            ],
+            ledger=ledger,
+        )
+        self.assertEqual(newline.reason, "missing_owner")
+        self.assertEqual(host.memory, [])
+
+        token_pin = dict(manifest)
+        token_pin["catalog_pin"] = "token=abcd"
+        refused_pin = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=token_pin,
+            memory=memory,
+            ledger=ledger,
+        )
+        self.assertEqual(refused_pin.reason, "credential")
+        self.assertIsNone(host.manifest)
+        self.assertNotIn("abcd", host.events)
+
+        token_digest = dict(manifest)
+        token_digest["image_digests"] = ["token=abcd"]
+        refused_digest = restore_host(
+            host,
+            actor="executor",
+            approval_exchanged=True,
+            manifest=token_digest,
+            memory=memory,
+            ledger=ledger,
+        )
+        self.assertEqual(refused_digest.reason, "credential")
+        self.assertIsNone(host.manifest)
+        self.assertNotIn("abcd", host.events)
 
 
 if __name__ == "__main__":

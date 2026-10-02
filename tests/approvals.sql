@@ -7,8 +7,11 @@ DECLARE
     ok_id uuid;
     mismatch_id uuid;
     expired_id uuid;
+    stored uuid;
     op1 uuid;
     op2 uuid;
+    op_stored uuid;
+    op_again uuid;
     journals integer;
 BEGIN
     BEGIN
@@ -130,6 +133,58 @@ BEGIN
     END IF;
     IF (SELECT status FROM approvals WHERE id = expired_id) <> 'expired' THEN
         RAISE EXCEPTION 'expired approval was not marked expired';
+    END IF;
+
+    stored := approval_store(
+        'board', 'owner', 'life',
+        '{"action_class":"publish","target":"note","payload_digest":"p"}'::jsonb
+    );
+    IF stored IS NULL THEN
+        RAISE EXCEPTION 'approval_store returned null';
+    END IF;
+    op_stored := approval_exchange_owner(
+        'board', stored, 'owner',
+        '{"action_class":"publish","target":"note","payload_digest":"p"}'::jsonb
+    );
+    op_again := approval_exchange_owner(
+        'board', stored, 'owner',
+        '{"action_class":"publish","target":"note","payload_digest":"p"}'::jsonb
+    );
+    IF op_stored IS NULL OR op_stored IS DISTINCT FROM op_again THEN
+        RAISE EXCEPTION 'owner exchange did not keep one journal';
+    END IF;
+    SELECT count(*) INTO journals FROM operation_journal WHERE approval_id = stored;
+    IF journals <> 1 THEN
+        RAISE EXCEPTION 'approval_store exchange wrote % journals', journals;
+    END IF;
+
+    BEGIN
+        PERFORM approval_store(
+            'chat', 'owner', 'life',
+            '{"action_class":"send","target":"a","payload_digest":"d"}'::jsonb
+        );
+        RAISE EXCEPTION 'chat store was accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM <> 'actor_cannot_approve' THEN
+                RAISE;
+            END IF;
+    END;
+
+    BEGIN
+        PERFORM approval_exchange_owner(
+            'board', stored, 'other',
+            '{"action_class":"publish","target":"note","payload_digest":"p"}'::jsonb
+        );
+        RAISE EXCEPTION 'owner mismatch was accepted';
+    EXCEPTION
+        WHEN raise_exception THEN
+            IF SQLERRM <> 'owner_mismatch' THEN
+                RAISE;
+            END IF;
+    END;
+    IF (SELECT status FROM approvals WHERE id = stored) <> 'exchanged' THEN
+        RAISE EXCEPTION 'owner mismatch rewrote an exchanged approval';
     END IF;
 
     BEGIN

@@ -1,9 +1,13 @@
 """Index one Postgres revision into Qdrant, then mark that queue item done.
 
 Postgres stays the authority. A missing point is not treated as a deleted
-note. The worker writes the fixed collections only. A role never shares
-the person's collection, even when the id text matches. family_shared,
-person_*, and role_profile_* are not created here.
+note. After the embed, the worker reads the row again. A tombstone or a
+newer revision is not upserted. A point whose payload revision is newer
+is left in place. A point this claim just wrote is removed only when
+that payload revision is still the claim, in one filtered delete.
+The worker writes the fixed collections only. A role
+never shares the person's collection, even when the id text matches.
+family_shared, person_*, and role_profile_* are not created here.
 """
 
 from __future__ import annotations
@@ -86,7 +90,7 @@ def drain(store, qdrant, embed, worker: str = "memoryd", limit: int = 32) -> str
     last = "idle"
     for _ in range(limit):
         last = index_once(store, qdrant, embed, worker)
-        if last not in {"indexed", "deleted", "missing"}:
+        if last not in {"indexed", "deleted", "missing", "stale"}:
             return last
     return last
 
@@ -114,31 +118,59 @@ def _index(tx, qdrant, embed, worker: str) -> str:
         raise Hold(reason) from None
     if not isinstance(vector, list) or len(vector) != VECTOR_SIZE:
         raise Hold("embed_dimensions")
+    fresh = tx.fetch(row.id)
+    if fresh is None:
+        tx.finish(claim.queue_id)
+        return "missing"
+    if fresh.deleted or fresh.revision != claim.revision:
+        return _superseded(tx, qdrant, name, row.id, claim.queue_id, fresh)
     _qdrant(lambda: qdrant.ensure(name))
     _qdrant(
         lambda: qdrant.upsert(
             name,
-            row.id,
+            fresh.id,
             [float(item) for item in vector],
             {
-                "owner_id": row.owner_id,
-                "owner_kind": row.owner_kind,
-                "topic": row.category,
+                "owner_id": fresh.owner_id,
+                "owner_kind": fresh.owner_kind,
+                "topic": fresh.category,
                 "source": "memory",
-                "content": row.content,
-                "visibility": row.visibility,
-                "revision": row.revision,
-                "memory_id": row.id,
+                "content": fresh.content,
+                "visibility": fresh.visibility,
+                "revision": fresh.revision,
+                "memory_id": fresh.id,
             },
         )
     )
-    fresh = tx.fetch(row.id)
-    if fresh is not None and fresh.deleted:
+    checked = tx.fetch(row.id)
+    if checked is not None and checked.deleted:
         _qdrant(lambda: qdrant.delete(name, row.id))
-    elif fresh is not None and fresh.revision == claim.revision:
-        tx.mark_indexed(row.id, claim.revision)
+        tx.finish(claim.queue_id)
+        return "deleted"
+    if checked is None or checked.revision != claim.revision:
+        _drop_own_write(qdrant, name, row.id, claim.revision)
+        tx.finish(claim.queue_id)
+        return "stale"
+    tx.mark_indexed(row.id, claim.revision)
     tx.finish(claim.queue_id)
     return "indexed"
+
+
+def _superseded(tx, qdrant, name: str, point_id: str, queue_id: int, fresh: Memory) -> str:
+    if fresh.deleted:
+        _qdrant(lambda: qdrant.ensure(name))
+        _qdrant(lambda: qdrant.delete(name, point_id))
+        tx.finish(queue_id)
+        return "deleted"
+    tx.finish(queue_id)
+    return "stale"
+
+
+def _drop_own_write(qdrant, name: str, point_id: str, revision: int) -> None:
+    drop = getattr(qdrant, "delete_revision", None)
+    if drop is None:
+        return
+    _qdrant(lambda: drop(name, point_id, revision))
 
 
 def search(qdrant, embed, *, owner_id: str, owner_kind: str, text: str, limit: int = RECALL_CAP) -> Decision:

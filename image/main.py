@@ -15,6 +15,7 @@ from pathlib import Path
 from image.console import InstallerConsole, SetupConsole
 from image.disks import Disk, parent_disk
 from image.install import apply, write_installed
+from image.kiosk import TOKEN_PATH, place_token
 from image.provision import serve
 from image.setup import Store, SystemRng, read_ifaces
 from image.starter import CODES, publish_board, start_core
@@ -94,6 +95,7 @@ def run_installed() -> None:
             store.wifi_joined = True
             store._text("wifi_joined", "yes")
     _persist_machine_id(store.machine_id)
+    _publish_kiosk_token(store)
     if store.server_note == "started":
         try:
             start_core(store)
@@ -114,6 +116,8 @@ def run_installed() -> None:
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
     def handoff() -> None:
+        _publish_kiosk_token(store)
+
         def go() -> None:
             time.sleep(0.4)
             httpd.shutdown()
@@ -126,6 +130,13 @@ def run_installed() -> None:
     _write(console.banner())
     for line in _lines():
         _write(console.line(line))
+
+
+def _publish_kiosk_token(store: Store) -> None:
+    try:
+        place_token(store.provision_token, TOKEN_PATH)
+    except OSError:
+        _write("The monitor token was not published.\n")
 
 
 def _publish(store: Store) -> None:
@@ -240,9 +251,9 @@ def model_transport(url: str, key: str, model: str) -> tuple[int, bytes]:
 def embed_transport() -> tuple[int, bytes]:
     import json
 
-    payload = json.dumps({"model": "nomic-embed-text", "prompt": "ready"}).encode()
+    payload = json.dumps({"model": "nomic-embed-text", "input": "ready"}).encode()
     request = urllib.request.Request(
-        "http://127.0.0.1:11434/api/embeddings",
+        "http://127.0.0.1:11434/api/embed",
         data=payload,
         headers={"Content-Type": "application/json"},
         method="POST",

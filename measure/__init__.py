@@ -3,7 +3,7 @@
 This package does not read the machine.
 """
 
-from measure.ram import TARGET_BYTES, Decision, Measurement, fits, measure
+from measure.ram import TARGET_BYTES, Decision, Measurement, fits, measure, room_for
 
 __all__ = [
     "TARGET_BYTES",
@@ -11,4 +11,5 @@ __all__ = [
     "Measurement",
     "fits",
     "measure",
+    "room_for",
 ]

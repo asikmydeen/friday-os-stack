@@ -1,0 +1,611 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qdrant
+  labels:
+    app.kubernetes.io/name: qdrant
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: qdrant
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: qdrant
+        friday.os/role: core
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 6333
+          env:
+            - name: QDRANT__SERVICE__API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: qdrant-api-key
+          volumeMounts:
+            - name: qdrant
+              mountPath: /qdrant/storage
+      volumes:
+        - name: qdrant
+          persistentVolumeClaim:
+            claimName: qdrant
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qdrant
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: qdrant
+  ports:
+    - name: http
+      port: 6333
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  labels:
+    app.kubernetes.io/name: ollama
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: embed-worker
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ollama
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ollama
+        friday.os/role: embed-worker
+    spec:
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 11434
+          volumeMounts:
+            - name: ollama
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama
+          persistentVolumeClaim:
+            claimName: ollama
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: ollama
+  ports:
+    - name: http
+      port: 11434
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+        friday.os/role: core
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: memories
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: postgres-password
+          volumeMounts:
+            - name: postgres
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: postgres
+          persistentVolumeClaim:
+            claimName: postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: http
+      port: 5432
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-mcp
+  labels:
+    app.kubernetes.io/name: memory-mcp
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: index-reconciler
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: memory-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: memory-mcp
+        friday.os/role: index-reconciler
+    spec:
+      containers:
+        - name: memory-mcp
+          image: friday-os-stack/memory-mcp:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: QDRANT_URL
+              value: http://qdrant:6333
+            - name: OLLAMA_URL
+              value: http://ollama:11434
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: memories
+            - name: POSTGRES_USER
+              value: postgres
+            - name: BIND_HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: MEMORY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: memory-token
+            - name: QDRANT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: qdrant-api-key
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: postgres-password
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-mcp
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: memory-mcp
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: executor
+  labels:
+    app.kubernetes.io/name: executor
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: executor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: executor
+        friday.os/role: core
+    spec:
+      containers:
+        - name: executor
+          image: friday-os-stack/executor:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: STORE_PATH
+              value: /data/gate.json
+            - name: BIND_HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: memories
+            - name: POSTGRES_USER
+              value: postgres
+            - name: BOARD_APPROVAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: board-approval-token
+            - name: FRIDAY_NOTIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: friday-notify-token
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: postgres-password
+          volumeMounts:
+            - name: executor
+              mountPath: /data
+      volumes:
+        - name: executor
+          persistentVolumeClaim:
+            claimName: executor
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: executor
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: executor
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: friday
+  labels:
+    app.kubernetes.io/name: friday
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: friday
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: friday
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: friday
+        friday.os/role: friday
+    spec:
+      containers:
+        - name: friday
+          image: friday-os-stack/friday:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: FRIDAY_STATE
+              value: /data/friday.sqlite
+            - name: MEMORY_URL
+              value: http://memory-mcp:8080
+            - name: EXECUTOR_URL
+              value: http://executor:8080
+            - name: OLLAMA_URL
+              value: http://ollama:11434
+            - name: WEBHOOK_URL
+              value: http://webhooks:8080
+            - name: BIND_HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: FRIDAY_NOTIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: friday-notify-token
+            - name: MEMORY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: memory-token
+            - name: MODEL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: model-api-key
+          volumeMounts:
+            - name: friday
+              mountPath: /data
+      volumes:
+        - name: friday
+          persistentVolumeClaim:
+            claimName: friday
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: friday
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: friday
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: board
+  labels:
+    app.kubernetes.io/name: board
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: board
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: board
+        friday.os/role: core
+    spec:
+      containers:
+        - name: board
+          image: friday-os-stack/board:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: FRIDAY_URL
+              value: http://friday:8080
+            - name: EXECUTOR_URL
+              value: http://executor:8080
+            - name: BIND_HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: BOARD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: board-password
+            - name: FRIDAY_NOTIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: friday-notify-token
+            - name: BOARD_APPROVAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: board-approval-token
+            - name: SOUL_APPLY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: soul-apply-token
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: board
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: board
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webhooks
+  labels:
+    app.kubernetes.io/name: webhooks
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: webhooks
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: webhooks
+        friday.os/role: core
+    spec:
+      containers:
+        - name: webhooks
+          image: friday-os-stack/webhooks:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: BIND_HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8080"
+            - name: POSTGRES_HOST
+              value: postgres
+            - name: POSTGRES_PORT
+              value: "5432"
+            - name: POSTGRES_DB
+              value: memories
+            - name: POSTGRES_USER
+              value: postgres
+            - name: FRIDAY_NOTIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: friday-notify-token
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: postgres-password
+            - name: WEBHOOK_SECRET_JELLYFIN
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: webhook-secret-jellyfin
+            - name: WEBHOOK_SECRET_RADARR
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: webhook-secret-radarr
+            - name: WEBHOOK_SECRET_SONARR
+              valueFrom:
+                secretKeyRef:
+                  name: friday-core
+                  key: webhook-secret-sonarr
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhooks
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: webhooks
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/name: gateway
+    app.kubernetes.io/instance: friday-core
+    friday.os/role: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: gateway
+        friday.os/role: core
+    spec:
+      containers:
+        - name: gateway
+          image: friday-os-stack/gateway:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8090
+          env:
+            - name: BIND_HOST
+              value: "0.0.0.0"
+            - name: PORT
+              value: "8090"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: gateway
+  ports:
+    - name: http
+      port: 8090
+      targetPort: http
+

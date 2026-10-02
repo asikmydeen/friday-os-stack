@@ -5,6 +5,7 @@ Routes match the wires: Jellyfin posts /media, Radarr and Sonarr post
 app. A retry of the same body returns the same row.
 
 speak() returns the sentence for the event type and does not read the
+body. announcements() returns those sentences and does not copy the
 body. This module does not call the executor and does not write an
 approval.
 """
@@ -18,6 +19,8 @@ import threading
 import uuid
 from dataclasses import dataclass
 from typing import Mapping
+
+from webhooks.queue import QueueError
 
 HEADER = "Friday-Webhook"
 MAX_BODY = 256 * 1024
@@ -65,9 +68,68 @@ class MemoryStore:
         self.by_key: dict[tuple[str, str], str] = {}
         self._lock = threading.Lock()
 
+    def insert_event(
+        self,
+        source: str,
+        route: str,
+        event_type: str,
+        announcement: str,
+        body_raw: str,
+        digest: str,
+    ) -> tuple[str, bool]:
+        with self._lock:
+            existing = self.by_key.get((source, digest))
+            if existing is not None:
+                return existing, False
+            event_id = str(uuid.uuid4())
+            self.events[event_id] = {
+                "id": event_id,
+                "source": source,
+                "route": route,
+                "event_type": event_type,
+                "announcement": announcement,
+                "body_raw": body_raw,
+                "body_sha256": digest,
+            }
+            self.by_key[(source, digest)] = event_id
+            return event_id, True
+
+    def list_announcements(self) -> list[dict]:
+        with self._lock:
+            rows = list(self.events.values())
+        rows.reverse()
+        return rows
+
+
+def announcements(store) -> list[dict]:
+    """Newest sentences only. The body stays on the row and is not copied."""
+    method = getattr(store, "list_announcements", None)
+    if method is None:
+        return []
+    found = method()
+    return _public(found)
+
+
+def _public(rows: object) -> list[dict]:
+    kept: list[dict] = []
+    if not isinstance(rows, (list, tuple)):
+        return kept
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        event_type = row.get("event_type")
+        source = row.get("source")
+        sentence = SENTENCES.get(event_type) if isinstance(event_type, str) else None
+        if sentence is None or source not in {"jellyfin", "radarr", "sonarr"}:
+            continue
+        kept.append({"source": source, "event_type": event_type, "announcement": sentence})
+        if len(kept) == 8:
+            break
+    return kept
+
 
 def receive(
-    store: MemoryStore,
+    store,
     *,
     method: str,
     route: str,
@@ -91,21 +153,19 @@ def receive(
     event_type = _classify(route, raw)
     announcement = SENTENCES[event_type]
     digest = hashlib.sha256(source.encode("utf-8") + b"\n" + raw).hexdigest()
-    with store._lock:
-        existing = store.by_key.get((source, digest))
-        if existing is not None:
-            return Receipt("duplicate", "already_stored", event_id=existing, event_type=event_type)
-        event_id = str(uuid.uuid4())
-        store.events[event_id] = {
-            "id": event_id,
-            "source": source,
-            "route": route,
-            "event_type": event_type,
-            "announcement": announcement,
-            "body_raw": raw.decode("utf-8", errors="replace"),
-            "body_sha256": digest,
-        }
-        store.by_key[(source, digest)] = event_id
+    try:
+        event_id, created = store.insert_event(
+            source,
+            route,
+            event_type,
+            announcement,
+            raw.decode("utf-8", errors="replace"),
+            digest,
+        )
+    except QueueError as exc:
+        return Receipt("refused", exc.reason)
+    if not created:
+        return Receipt("duplicate", "already_stored", event_id=event_id, event_type=event_type)
     return Receipt(
         "stored",
         "stored",

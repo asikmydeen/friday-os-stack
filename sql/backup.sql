@@ -1,8 +1,9 @@
 -- Coordinated backup manifest.
 --
--- backup/coordinated.py pauses writers before it calls backup_store.
+-- The executor calls backup_store when POSTGRES_HOST is set.
 -- A live SQLite copy, a stored passphrase, a movie file, or an
--- unmarked app cannot be inserted. Compose has no backup service.
+-- unmarked app cannot be inserted. Nothing is copied.
+-- Compose has no backup service.
 
 CREATE TABLE IF NOT EXISTS backup_manifests (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

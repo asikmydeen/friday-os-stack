@@ -1,6 +1,7 @@
 """Installer disk rules, setup screen, and the pre-release filesystem scan."""
 
 import json
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -29,9 +30,19 @@ from image.disks import (
     choose,
 )
 from image.install import apply, write_installed
+from image.logs import (
+    DOCKER_MAX_FILE,
+    DOCKER_MAX_SIZE,
+    JOURNAL_RUNTIME_MAX,
+    JOURNAL_SYSTEM_MAX,
+    ceiling_text,
+    docker_daemon,
+    journald_dropin,
+    shipped,
+)
 from image.main import data_mounted, root_device
 from image.qdrant_bootstrap import plain_env
-from image.starter import start_core
+from image.starter import _compose, _reach_stays_off, _wait_listeners, start_core
 from image.provision import handle, serve
 from image.scan import scan
 from image.setup import (
@@ -264,6 +275,8 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(again.webhook_jellyfin, self.store.webhook_jellyfin)
         self.assertEqual(again.webhook_radarr, self.store.webhook_radarr)
         self.assertEqual(again.webhook_sonarr, self.store.webhook_sonarr)
+        self.assertEqual(again.soul_apply_token, self.store.soul_apply_token)
+        self.assertNotEqual(self.store.soul_apply_token, other.soul_apply_token)
 
     def test_an_existing_machine_id_is_kept(self):
         adopted = Store(Path(self.tmp.name) / "adopted")
@@ -290,6 +303,7 @@ class SetupTests(unittest.TestCase):
         self.store.model_key = "sk-test-key-9f3a"
         text = self.store.status_text()
         self.assertIn(self.store.board_password, text)
+        self.assertIn(self.store.soul_apply_token, text)
         self.assertNotIn(self.store.notify_token, text)
         self.assertNotIn(self.store.memory_token, text)
         self.assertNotIn(self.store.qdrant_key, text)
@@ -356,6 +370,52 @@ class SetupTests(unittest.TestCase):
         self.assertTrue(self.store.model_ok)
         self.assertNotIn("sk-test-key-9f3a", self.store.status_text())
 
+    def test_a_credential_shaped_model_name_is_not_stored(self):
+        self.store.ifaces = [Iface("enp0s1", True, "wired")]
+        self.store.resolve = lambda _host: ["93.184.216.34"]
+        calls = {"n": 0}
+
+        def transport(url, key, model):
+            calls["n"] += 1
+            return 200, b'{"choices":[{"message":{"content":"ready"}}]}'
+
+        self.store.transport = transport
+        kept = "The password is kept outside the machine"
+        outcome = self.store.set_model("https://example.test/v1", kept, "", "sk-test-key-9f3a")
+        self.assertEqual(outcome.reason, "model_ok")
+        self.assertEqual(self.store.model_fast, kept)
+        self.assertEqual(calls["n"], 1)
+        secret = "sk-" + ("a" * 20)
+        fast_file = self.store.root / "model_fast"
+        think_file = self.store.root / "model_think"
+        key_file = self.store.root / "secrets" / "model_api_key"
+        before_fast = fast_file.read_text()
+        before_key = key_file.read_text()
+        refused = self.store.set_model("https://example.test/v1", secret, "owner-think", "sk-test-key-9f3a")
+        self.assertEqual(refused.reason, "credential")
+        self.assertEqual(self.store.model_fast, kept)
+        self.assertEqual(self.store.model_think, "")
+        self.assertEqual(fast_file.read_text(), before_fast)
+        self.assertEqual(key_file.read_text(), before_key)
+        self.assertNotIn(secret, fast_file.read_text())
+        self.assertNotIn(secret, think_file.read_text())
+        self.assertNotIn(secret, self.store.status_text())
+        think_secret = "password is hunter22"
+        refused_think = self.store.set_model(
+            "https://example.test/v1", "fast", think_secret, "sk-test-key-9f3a"
+        )
+        self.assertEqual(refused_think.reason, "credential")
+        self.assertEqual(self.store.model_fast, kept)
+        self.assertNotIn("hunter22", think_file.read_text())
+        self.assertNotIn("hunter22", fast_file.read_text())
+        blank = self.store.set_model("https://example.test/v1", "  ", "", "sk-test-key-9f3a")
+        self.assertEqual(blank.reason, "model_missing")
+        self.assertEqual(self.store.model_fast, kept)
+        newline = self.store.set_model("https://example.test/v1", "ok\nname", "", "sk-test-key-9f3a")
+        self.assertEqual(newline.reason, "model_missing")
+        self.assertEqual(calls["n"], 1)
+        self.assertEqual(fast_file.read_text(), before_fast)
+
     def test_finish_stops_on_the_missing_embed_model(self):
         self._prepare()
         self.store.embed_transport = None
@@ -370,11 +430,60 @@ class SetupTests(unittest.TestCase):
         self.store.embed_transport = down
         self.assertEqual(self.store.finish().reason, "embed_not_in_image")
         self.store.embed_transport = lambda: (200, b'{"embedding":[1,2,3]}')
+        self.assertEqual(self.store.check_embed().reason, "embed_model")
+        self.store.embed_transport = lambda: (
+            200,
+            json.dumps({"model": "nomic-embed-text", "embedding": [1, 2, 3]}).encode(),
+        )
         self.assertEqual(self.store.check_embed().reason, "embed_dimensions")
+
+    def test_a_768_vector_from_another_model_does_not_finish(self):
+        self._prepare()
+        self.store.embed_transport = lambda: (
+            200,
+            json.dumps({"model": "other-embed", "embeddings": [[0] * 768]}).encode(),
+        )
+        outcome = self.store.finish()
+        self.assertEqual(outcome.reason, "embed_model")
+        self.assertEqual(self.store.provision_state, "open")
+        self.assertFalse(self.store.embed_ok)
+        self.assertTrue((self.store.root / "provision.token").is_file())
+        self.assertEqual((self.store.root / "embed_ok").read_text().strip(), "no")
+
+    def test_a_stored_yes_does_not_skip_the_pin(self):
+        self._prepare()
+        self.store.embed_ok = True
+        self.store._text("embed_ok", "yes")
+        self.store.embed_transport = lambda: (
+            200,
+            json.dumps({"embeddings": [[0] * 768]}).encode(),
+        )
+        outcome = self.store.finish()
+        self.assertEqual(outcome.reason, "embed_model")
+        self.assertEqual(self.store.provision_state, "open")
+        self.assertFalse(self.store.embed_ok)
+        self.assertEqual((self.store.root / "embed_ok").read_text().strip(), "no")
+        self.assertTrue((self.store.root / "provision.token").is_file())
+
+    def test_a_later_miss_clears_a_passed_embed(self):
+        self._prepare()
+        self.store.embed_transport = lambda: (
+            200,
+            json.dumps({"model": "nomic-embed-text", "embeddings": [[0] * 768]}).encode(),
+        )
+        self.assertEqual(self.store.check_embed().reason, "embed_ok")
+        self.assertTrue(self.store.embed_ok)
+        self.store.embed_transport = lambda: (503, b"")
+        self.assertEqual(self.store.check_embed().reason, "embed_not_ready")
+        self.assertFalse(self.store.embed_ok)
+        self.assertEqual((self.store.root / "embed_ok").read_text().strip(), "no")
 
     def test_a_768_vector_completes_setup_once(self):
         self._prepare()
-        self.store.embed_transport = lambda: (200, json.dumps({"embedding": [0] * 768}).encode())
+        self.store.embed_transport = lambda: (
+            200,
+            json.dumps({"model": "nomic-embed-text:latest", "embeddings": [[0] * 768]}).encode(),
+        )
         password = self.store.board_password
         memory = self.store.memory_token
         outcome = self.store.finish()
@@ -382,6 +491,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(self.store.provision_state, "complete")
         self.assertFalse((self.store.root / "provision.token").exists())
         self.assertNotIn(password, self.store.status_text())
+        self.assertNotIn(self.store.soul_apply_token, self.store.status_text())
         again = Store(self.store.root)
         again.load_or_mint(FakeRng(8))
         self.assertEqual(again.provision_token, "")
@@ -581,13 +691,18 @@ class SetupTests(unittest.TestCase):
         env = (self.store.root / "core.env").read_text()
         self.assertIn(self.store.postgres_password, env)
         self.assertIn(self.store.webhook_jellyfin, env)
+        self.assertIn(self.store.soul_apply_token, env)
+        self.assertIn("SOUL_APPLY_TOKEN", env)
         self.assertNotIn(self.store.webhook_jellyfin, text)
+        self.assertNotIn(self.store.soul_apply_token, (self.store.root / "start.log").read_text())
         self.assertEqual((self.store.root / "core.env").stat().st_mode & 0o777, 0o600)
         self.assertNotIn(self.store.postgres_password, (self.store.root / "start.log").read_text())
         up = next(argv for argv in calls if "up" in argv)
         self.assertEqual(up[up.index("-p") + 1], "friday")
         self.assertIn("--pull", up)
         self.assertIn("never", up)
+        self.assertNotIn("--profile", up)
+        self.assertNotIn("reach", up)
         self.assertNotIn("friday-os-stack", up)
         self.assertTrue(loaded["ok"])
         self.assertTrue(
@@ -596,6 +711,170 @@ class SetupTests(unittest.TestCase):
                 / "ollama/models/manifests/registry.ollama.ai/library/nomic-embed-text/latest"
             ).is_file()
         )
+        self.assertIn("Embed: not checked", text)
+        self.assertFalse(self.store.embed_ok)
+
+    def test_a_pinned_embed_reply_is_recorded_when_the_core_starts(self):
+        root = self._core_root()
+
+        def run(argv):
+            if argv[:3] == ["docker", "image", "inspect"]:
+                return ""
+
+        good = json.dumps(
+            {"model": "nomic-embed-text", "embeddings": [[0] * 768]}
+        ).encode()
+        short = json.dumps(
+            {"model": "nomic-embed-text", "embeddings": [[0, 1, 2]]}
+        ).encode()
+        self.store.omitted = list(NOT_IN_IMAGE)
+        self.store.starter = lambda store: start_core(
+            store, run, root, embed_check=lambda: short
+        )
+        refused = self.store.confirm_server()
+        self.assertEqual(refused.reason, "embed_dimensions")
+        self.assertFalse(self.store.started)
+        self.assertFalse(self.store.embed_ok)
+        self.assertEqual((self.store.root / "embed_ok").read_text().strip(), "no")
+        self.assertIn("Embed: not checked", self.store.status_text())
+        self.assertIn("The core did not start", self.store.status_text())
+
+        self.store.starter = lambda store: start_core(
+            store, run, root, embed_check=lambda: good
+        )
+        outcome = self.store.confirm_server()
+        self.assertEqual(outcome.reason, "started")
+        self.assertTrue(self.store.embed_ok)
+        self.assertEqual((self.store.root / "embed_ok").read_text().strip(), "yes")
+        text = self.store.status_text()
+        self.assertIn("Embed: nomic-embed-text, 768", text)
+        self.assertIn("The core on this computer was started", text)
+        self.assertNotIn("Notes: empty", text)
+        self.assertNotIn("Notes: kept", text)
+        self.assertNotIn(self.store.postgres_password, text)
+
+    def test_empty_notes_are_recorded_only_after_the_smoke_point_is_gone(self):
+        root = self._core_root()
+        good = json.dumps(
+            {"model": "nomic-embed-text", "embeddings": [[0] * 768]}
+        ).encode()
+
+        def run(argv):
+            if argv[:3] == ["docker", "image", "inspect"]:
+                return ""
+            if "/bootstrap.py" in argv:
+                return "friday_profile 0\nfriday_episodes 0\nnotes empty\n"
+
+        self.store.omitted = list(NOT_IN_IMAGE)
+        self.store.starter = lambda store: start_core(
+            store, run, root, embed_check=lambda: good
+        )
+        outcome = self.store.confirm_server()
+        self.assertEqual(outcome.reason, "started")
+        self.assertIn("Notes: empty", self.store.status_text())
+        self.assertNotIn("Notes: kept", self.store.status_text())
+        self.assertEqual((self.store.root / "notes_state").read_text().strip(), "empty")
+        self.assertNotIn(self.store.postgres_password, self.store.status_text())
+
+        def kept(argv):
+            if argv[:3] == ["docker", "image", "inspect"]:
+                return ""
+            if "/bootstrap.py" in argv:
+                return "friday_profile 2\nnotes kept\n"
+
+        self.store.starter = lambda store: start_core(
+            store, kept, root, embed_check=lambda: good
+        )
+        self.store.confirm_server()
+        text = self.store.status_text()
+        self.assertIn("Notes: kept", text)
+        self.assertNotIn("Notes: empty", text)
+
+        def missed(argv):
+            if "/bootstrap.py" in argv:
+                raise OSError("smoke_point")
+            if argv[:3] == ["docker", "image", "inspect"]:
+                return ""
+            return ""
+
+        self.store.notes_state = ""
+        (self.store.root / "notes_state").unlink()
+        self.store.starter = lambda store: start_core(
+            store, missed, root, embed_check=lambda: good
+        )
+        refused = self.store.confirm_server()
+        self.assertEqual(refused.reason, "smoke_point")
+        self.assertFalse(self.store.started)
+        self.assertNotIn("Notes: empty", self.store.status_text())
+        self.assertNotIn("Notes: kept", self.store.status_text())
+
+    def _core_root(self) -> Path:
+        root = Path(self.tmp.name) / "image-root-embed"
+        models = (
+            root
+            / "usr/lib/friday/ollama-models/models/manifests/registry.ollama.ai/library/nomic-embed-text"
+        )
+        models.mkdir(parents=True)
+        (models / "latest").write_text("{}\n")
+        (root / "usr/lib/friday/images").mkdir(parents=True)
+        (root / "usr/lib/friday/images/core-images.tar").write_bytes(b"tar")
+        (root / "usr/lib/friday/qdrant_bootstrap.py").write_text("print('ok')\n")
+        (root / "usr/lib/friday/compose.yml").write_text("name: friday\n")
+        return root
+
+    def test_listeners_retry_then_answer(self):
+        calls = {"n": 0}
+
+        def run(argv):
+            calls["n"] += 1
+            if calls["n"] < 2:
+                raise subprocess.CalledProcessError(1, argv)
+
+        _wait_listeners(run, attempts=3, pause=lambda _seconds: None)
+        self.assertEqual(calls["n"], 2)
+
+    def test_listeners_that_stay_down_are_a_start_error(self):
+        def run(_argv):
+            raise OSError("down")
+
+        with self.assertRaises(OSError) as caught:
+            _wait_listeners(run, attempts=2, pause=lambda _seconds: None)
+        self.assertEqual(str(caught.exception), "listeners")
+
+    def test_the_reach_profile_stays_off_when_the_core_starts(self):
+        def run(argv):
+            self.assertEqual(argv[:2], ["docker", "ps"])
+            return "friday-friday-1\nfriday-gateway-1\n"
+
+        _reach_stays_off(run)
+        seen = []
+        _compose(seen.append, Path("/"), Path("/tmp/core.env"), (), ())
+        self.assertNotIn("--profile", seen[0])
+        self.assertNotIn("reach", seen[0])
+
+    def test_a_started_door_container_is_a_start_error(self):
+        def run(_argv):
+            return "friday-door-1\n"
+
+        with self.assertRaises(OSError) as caught:
+            _reach_stays_off(run)
+        self.assertEqual(str(caught.exception), "reach_started")
+
+    def test_a_started_browser_container_is_a_start_error(self):
+        def run(_argv):
+            return "friday-browser-1\n"
+
+        with self.assertRaises(OSError) as caught:
+            _reach_stays_off(run)
+        self.assertEqual(str(caught.exception), "reach_started")
+
+    def test_a_started_outbound_container_is_a_start_error(self):
+        def run(_argv):
+            return "friday-outbound-1\n"
+
+        with self.assertRaises(OSError) as caught:
+            _reach_stays_off(run)
+        self.assertEqual(str(caught.exception), "reach_started")
 
     def test_a_start_error_does_not_claim_the_core_is_up(self):
         self.store.omitted = []
@@ -637,19 +916,95 @@ class SetupTests(unittest.TestCase):
             if stripped.startswith("- ") or stripped.startswith("ports:"):
                 self.assertNotIn("0.0.0.0", line)
         self.assertIn("BIND_HOST: 0.0.0.0", compose)
+        executor = compose.split("  executor:", 1)[1].split("  friday:", 1)[0]
+        gateway = compose.split("  gateway:", 1)[1].split("\n  door:", 1)[0]
+        door = compose.split("\n  door:", 1)[1].split("\n  mcp:", 1)[0]
+        mcp = compose.split("\n  mcp:", 1)[1].split("\n  browser:", 1)[0]
+        browser = compose.split("\n  browser:", 1)[1].split("\n  outbound:", 1)[0]
+        outbound = compose.split("\n  outbound:", 1)[1].split("\n  tailscale:", 1)[0]
+        self.assertIn("BIND_HOST: core", executor)
+        self.assertIn("CORE_PEER: postgres", executor)
+        self.assertIn("POSTGRES_HOST: postgres", executor)
+        self.assertIn("depends_on: [postgres]", executor)
+        self.assertNotIn("ports:", executor)
+        self.assertNotIn("BIND_HOST: 0.0.0.0", executor)
+        self.assertIn("BIND_HOST: core", gateway)
+        self.assertIn("CORE_PEER: postgres", gateway)
+        self.assertNotIn("BIND_HOST: 0.0.0.0", gateway)
+        self.assertIn("profiles: [reach]", door)
+        self.assertIn("networks: [doors]", door)
+        self.assertIn("DOOR_ENABLED: ${DOOR_ENABLED:-no}", door)
+        self.assertNotIn("MEMORY_TOKEN", door)
+        self.assertNotIn("EXECUTOR_URL", door)
+        self.assertNotIn("POSTGRES_PASSWORD", door)
+        self.assertIn("profiles: [reach]", mcp)
+        self.assertIn("networks: [doors]", mcp)
+        self.assertIn("MCP_ENABLED: ${MCP_ENABLED:-no}", mcp)
+        self.assertNotIn("MEMORY_TOKEN", mcp)
+        self.assertNotIn("QDRANT_API_KEY", mcp)
+        self.assertIn("profiles: [reach]", browser)
+        self.assertIn("networks: [browser]", browser)
+        self.assertIn("BROWSER_ENABLED: ${BROWSER_ENABLED:-no}", browser)
+        self.assertNotIn("MEMORY_TOKEN", browser)
+        self.assertNotIn("EXECUTOR_URL", browser)
+        self.assertNotIn("POSTGRES_PASSWORD", browser)
+        self.assertNotIn("FRIDAY_URL", browser)
+        self.assertIn("profiles: [reach]", outbound)
+        self.assertIn("networks: [outbound]", outbound)
+        self.assertIn('command: ["python", "-m", "mcpbus.outbound"]', outbound)
+        self.assertIn("OUTBOUND_ENABLED: ${OUTBOUND_ENABLED:-no}", outbound)
+        self.assertNotIn("MEMORY_TOKEN", outbound)
+        self.assertNotIn("POSTGRES_PASSWORD", outbound)
+        self.assertNotIn("FRIDAY_URL", outbound)
         self.assertIn("127.0.0.1:11434:11434", compose)
-        self.assertEqual(compose.count("pull_policy: never"), 9)
+        self.assertEqual(compose.count("pull_policy: never"), 15)
         self.assertIn("networks: [core]\n", compose)
-        self.assertIn("networks: [apps]\n", compose)
+        webhooks = compose.split("\n  webhooks:", 1)[1].split("\n  gateway:", 1)[0]
+        self.assertIn("networks: [apps, core]", webhooks)
+        self.assertIn("POSTGRES_HOST: postgres", webhooks)
+        self.assertIn("FRIDAY_NOTIFY_TOKEN: ${FRIDAY_NOTIFY_TOKEN}", webhooks)
+        self.assertIn("depends_on: [postgres]", webhooks)
+        self.assertNotIn("ports:", webhooks)
+        self.assertIn("/usr/lib/friday/sql/webhooks.sql", compose)
+        self.assertIn("/usr/lib/friday/sql/backup.sql", compose)
+        self.assertIn("/usr/lib/friday/sql/approvals.sql", compose)
+        script = Path("image/build-inside.sh").read_text()
+        self.assertIn('cp /src/sql/webhooks.sql', script)
+        self.assertIn('cp /src/sql/backup.sql', script)
+        self.assertIn('cp /src/sql/approvals.sql', script)
+        stamp = Path("scripts/fetch-core.sh").read_text()
+        self.assertIn('"$ROOT/backup"', stamp)
+        self.assertIn('"$ROOT/sql"', stamp)
         self.assertIn("internal: true", compose)
-        self.assertEqual(compose.count("ports:"), 1)
+        self.assertEqual(compose.count("  doors:\n"), 1)
+        self.assertEqual(compose.count("  browser:\n"), 2)
+        self.assertEqual(compose.count("  outbound:\n"), 2)
+        self.assertEqual(compose.count("ports:"), 2)
+        self.assertIn('"${MESH_PORT}:${MESH_PORT}"', compose)
         self.assertNotIn("8090:8090", compose)
         self.assertNotIn("127.0.0.1:8080", compose)
         self.assertIn("friday-os-stack/webhooks:0.1.0-amd64", compose)
         self.assertIn("friday-os-stack/gateway:0.1.0-amd64", compose)
+        self.assertIn("friday-os-stack/door:0.1.0-amd64", compose)
+        self.assertIn("friday-os-stack/mcp:0.1.0-amd64", compose)
+        self.assertIn("friday-os-stack/browser:0.1.0-amd64", compose)
         friday = compose.split("  friday:", 1)[1].split("  board:", 1)[0]
-        self.assertIn("networks: [core]", friday)
+        board_service = compose.split("\n  board:", 1)[1].split("\n  webhooks:", 1)[0]
+        self.assertIn("CATALOG_ROOT: /catalog", board_service)
+        self.assertIn("/usr/lib/friday/catalog-snapshot:/catalog:ro", board_service)
+        self.assertNotIn("ports:", board_service)
+        self.assertIn("networks: [core, doors]", friday)
+        self.assertIn("FRIDAY_STATE: /data/friday.sqlite", friday)
+        self.assertIn("WEBHOOK_URL: http://webhooks:8080", friday)
+        self.assertIn("webhooks", friday.split("depends_on:", 1)[1])
+        self.assertIn("${FRIDAY_DATA}/friday:/data", friday)
         self.assertNotIn("apps", friday)
+        self.assertNotIn("browser", friday)
+        dev = Path("compose.yml").read_text()
+        self.assertNotIn("\n  door:", "\n" + dev)
+        self.assertNotIn("\n  doors:", "\n" + dev)
+        self.assertNotIn("\n  browser:", "\n" + dev)
+        self.assertNotIn("\n  outbound:", "\n" + dev)
         kiosk = Path("image/assets/friday-kiosk.service").read_text()
         self.assertIn("ConditionPathExists=/dev/dri/card0", kiosk)
         self.assertIn("http://127.0.0.1:8080", kiosk)
@@ -706,6 +1061,51 @@ class PageTests(unittest.TestCase):
                 httpd.shutdown()
                 httpd.server_close()
                 thread.join(timeout=5)
+
+
+class LogBoundTests(unittest.TestCase):
+    def test_the_image_caps_container_logs_and_the_journal(self):
+        daemon = json.loads(docker_daemon())
+        self.assertEqual(daemon["log-driver"], "json-file")
+        self.assertEqual(daemon["log-opts"]["max-size"], DOCKER_MAX_SIZE)
+        self.assertEqual(daemon["log-opts"]["max-file"], str(DOCKER_MAX_FILE))
+        self.assertEqual(DOCKER_MAX_SIZE, "10m")
+        self.assertEqual(DOCKER_MAX_FILE, 3)
+        journal = journald_dropin()
+        self.assertIn(f"SystemMaxUse={JOURNAL_SYSTEM_MAX}", journal)
+        self.assertIn(f"RuntimeMaxUse={JOURNAL_RUNTIME_MAX}", journal)
+        self.assertEqual(JOURNAL_SYSTEM_MAX, "256M")
+        self.assertEqual(JOURNAL_RUNTIME_MAX, "64M")
+        text = ceiling_text()
+        self.assertIn(f"data_floor_bytes={16 * GiB}", text)
+        self.assertNotIn("asikmydeen", text)
+        files = shipped()
+        self.assertEqual(
+            set(files),
+            {
+                "etc/docker/daemon.json",
+                "etc/systemd/journald.conf.d/friday.conf",
+                "etc/friday-log-ceiling",
+            },
+        )
+        script = Path("image/build-inside.sh").read_text()
+        self.assertIn("from image.logs import shipped", script)
+        self.assertIn("usr/lib/friday/image/logs.py", script)
+        self.assertIn("etc/docker/daemon.json", script)
+        self.assertIn("etc/systemd/journald.conf.d/friday.conf", script)
+        self.assertIn("Container logs rotate", script)
+        banner = InstallerConsole([], installer_known=True).banner()
+        self.assertIn("Container logs rotate. The journal is capped.", banner)
+
+    def test_the_log_bounds_are_not_a_secret_finding(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw) / "tree"
+            _clean(root)
+            for rel, text in shipped().items():
+                path = root / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text)
+            self.assertEqual(scan(root), [])
 
 
 class ScanTests(unittest.TestCase):

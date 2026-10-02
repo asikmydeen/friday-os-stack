@@ -1,7 +1,9 @@
 # Pinned commit of https://github.com/truenas/apps this catalog renders
 # against. Empty. catalog/discover.py lists nothing from upstream.
-# Install stays closed. Files in catalog/wires/ are drafts, and no
-# renderer consumes them.
+# Install stays closed. Files in catalog/wires/ are drafts.
+# catalog/render.py judges a description the caller supplies. It does
+# not read those drafts, does not render a template, and does not write
+# this file.
 #
 # Format once populated:
 #   commit: <full 40-char sha>

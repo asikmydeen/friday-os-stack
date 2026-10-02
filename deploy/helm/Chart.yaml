@@ -1,0 +1,6 @@
+apiVersion: v2
+name: friday-core
+description: Core services for an existing Kubernetes cluster. Not a phone path.
+type: application
+version: 0.0.2
+appVersion: "0.0.2"

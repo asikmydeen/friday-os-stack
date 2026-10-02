@@ -1,4 +1,5 @@
-# EXPERIMENTAL — bundle draft, not implemented or tested yet.
+# EXPERIMENTAL — bundle draft. guests/bundle.py records this plan and does not apply it.
+# Not rendered against a real image. Catalog install stays closed.
 # The "Movies and TV" bundle described in docs/apps.md. The operator answers
 # one question, Jellyfin or Plex. Only that player is installed. The other
 # is left out, and Plex's claim token is asked only when Plex was chosen.

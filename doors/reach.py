@@ -10,10 +10,17 @@ are never publishable.
 
 confirmed=true is ignored. This module does not listen and does not
 open a socket.
+
+remove_node decides a later cleanup. It does not delete a peer. While
+Headscale is absent, an ephemeral name is skipped. A name other than
+coder-<workspace> is refused, including a phone, a laptop, and a NAS.
+Failed coder work is kept for three hours. A caller can name more
+machines that must be kept.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 NON_PUBLISHABLE = frozenset({
@@ -30,6 +37,9 @@ MESH_OPEN = {
     "board": "board",
     "mcp": "mcp_listener",
 }
+PERMANENT = frozenset({"phone", "laptop", "nas"})
+THREE_HOURS = 3 * 60 * 60
+_CODER = re.compile(r"coder-[A-Za-z0-9][A-Za-z0-9_-]{0,63}\Z")
 
 
 @dataclass(frozen=True)
@@ -79,3 +89,33 @@ def tunnel(
     if access_checked is not True:
         return Decision("refused", "access_unchecked")
     return Decision("allowed", "board")
+
+
+def remove_node(
+    name: str,
+    *,
+    mesh_on: bool = False,
+    workspace_gone: bool = False,
+    failed_at: int | None = None,
+    now: int = 0,
+    permanent: tuple[str, ...] = (),
+    confirmed: bool = False,
+) -> Decision:
+    del confirmed
+    blocked = PERMANENT | {item.casefold() for item in permanent}
+    if name.casefold() in blocked or _CODER.fullmatch(name) is None:
+        return Decision("refused", "permanent_peer")
+    if mesh_on is not True:
+        return Decision("skipped", "headscale_absent")
+    if workspace_gone is not True:
+        return Decision("kept", "workspace_still_here")
+    if failed_at is not None:
+        if (
+            isinstance(failed_at, bool)
+            or not isinstance(failed_at, int)
+            or isinstance(now, bool)
+            or not isinstance(now, int)
+            or now - failed_at < THREE_HOURS
+        ):
+            return Decision("kept", "failed_work_kept")
+    return Decision("remove", "coder_workspace_gone")

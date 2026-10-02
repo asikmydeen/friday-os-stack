@@ -1,0 +1,19 @@
+{{- range .Values.volumes }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .name }}
+  labels:
+    app.kubernetes.io/instance: friday-core
+spec:
+  accessModes:
+{{- if $.Values.clusterSupportsReadWriteOncePod }}
+    - ReadWriteOncePod
+{{- else }}
+    - ReadWriteOnce
+{{- end }}
+  resources:
+    requests:
+      storage: {{ .size }}
+---
+{{- end }}
